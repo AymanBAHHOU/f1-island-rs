@@ -1,0 +1,15 @@
+{
+  "name": "f1-island-rs",
+  "version": "0.0.1",
+  "private": true,
+  "description": "F1 Island, rewritten in Rust with Tauri",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

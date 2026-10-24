@@ -1,0 +1,133 @@
+// F1 Island, stage 1: a transparent, always-on-top window that shows the island,
+// lets clicks fall through to whatever is underneath, and opens when the mouse
+// is over the island. Same idea as the Electron app's main.js, in Rust.
+
+// In release builds, don't open a console window next to the app (Windows only).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::{Emitter, Manager, PhysicalPosition};
+
+// The window is bigger than the island and transparent. The island sits EDGE
+// pixels below the window's top, and the window is moved up by EDGE so the
+// island ends up TOP_GAP from the top of the screen (these match the Electron app).
+const EDGE: f64 = 32.0;
+const TOP_GAP: f64 = 8.0;
+
+// ---------- data sent to the page ----------
+
+// `#[derive(Serialize)]` generates the code that turns this struct into JSON, so
+// the page can receive it. `String` owns its text; `i64` is a 64-bit whole number.
+#[derive(Serialize)]
+struct Status {
+    title: String,
+    subtitle: String,
+    next: String,
+    starts_in_secs: i64,
+}
+
+// A command is a Rust function the page can call by name:
+//   await window.__TAURI__.core.invoke('island_status')
+// Stage 1 invents the data; stage 3 will fetch the real schedule here.
+#[tauri::command]
+fn island_status() -> Status {
+    // Pretend the next session starts at the top of the next hour.
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0); // if the clock is before 1970, use 0 instead of failing
+    let next_hour = (now / 3600 + 1) * 3600;
+    Status {
+        title: "United States Grand Prix".to_string(),
+        subtitle: "Circuit of the Americas · USA".to_string(),
+        next: "Practice 3".to_string(),
+        starts_in_secs: (next_hour - now) as i64,
+    }
+}
+
+// ---------- where the island is, so we know when the mouse is over it ----------
+
+// The page tells us the island's rectangle (in CSS pixels, relative to the window).
+#[derive(Clone, Copy, Deserialize)]
+struct Rect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+// Shared state. The polling thread reads it while commands write it, so it sits
+// behind a `Mutex`: only one side can hold the lock at a time. `Option` because
+// the page hasn't reported a rectangle yet when we start.
+#[derive(Default)]
+struct HitRect(Mutex<Option<Rect>>);
+
+#[tauri::command]
+fn report_rect(rect: Rect, state: tauri::State<HitRect>) {
+    *state.0.lock().unwrap() = Some(rect);
+}
+
+// ---------- the window ----------
+
+fn main() {
+    tauri::Builder::default()
+        .manage(HitRect::default())
+        .invoke_handler(tauri::generate_handler![island_status, report_rect])
+        .setup(|app| {
+            let win = app
+                .get_webview_window("main")
+                .expect("the window from tauri.conf.json");
+
+            // Centre the window horizontally at the top of the monitor it's on.
+            if let Some(monitor) = win.current_monitor()? {
+                let scale = monitor.scale_factor();
+                let size = win.outer_size()?;
+                let x = monitor.position().x + (monitor.size().width as i32 - size.width as i32) / 2;
+                let y = monitor.position().y + ((TOP_GAP - EDGE) * scale) as i32;
+                win.set_position(PhysicalPosition::new(x, y))?;
+            }
+
+            // Start click-through: clicks pass to the apps underneath.
+            win.set_ignore_cursor_events(true)?;
+
+            // A window that is click-through can't see the mouse, so a background
+            // thread asks the OS where the cursor is, 20 times a second. When it
+            // enters or leaves the island it makes the window clickable (or not)
+            // and tells the page, which opens or closes the island.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let mut hovering = false;
+                loop {
+                    std::thread::sleep(Duration::from_millis(50));
+
+                    let Some(win) = handle.get_webview_window("main") else {
+                        continue;
+                    };
+                    let (Ok(cursor), Ok(pos)) = (win.cursor_position(), win.outer_position()) else {
+                        continue;
+                    };
+                    let scale = win.scale_factor().unwrap_or(1.0);
+                    let rect = *handle.state::<HitRect>().0.lock().unwrap();
+
+                    // Cursor position relative to the window, in CSS pixels.
+                    let x = (cursor.x - pos.x as f64) / scale;
+                    let y = (cursor.y - pos.y as f64) / scale;
+                    let inside = rect.is_some_and(|r| {
+                        x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
+                    });
+
+                    if inside != hovering {
+                        hovering = inside;
+                        let _ = win.set_ignore_cursor_events(!inside);
+                        let _ = win.emit("hover", inside);
+                    }
+                }
+            });
+
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running F1 Island");
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the island's page may do: listen to events from Rust and call our commands.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
