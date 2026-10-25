@@ -8,7 +8,6 @@
   const on = (name, cb, pick = (e) => e.payload) => {
     listen(name, (e) => cb(pick(e)));
   };
-  const unsupported = (what) => () => Promise.reject(new Error(`${what} is not available yet`));
   const noop = () => {};
 
   // The weekend, standings, title fight and circuit history, all put together in Rust.
@@ -21,31 +20,31 @@
     weekendResults: () => invoke('weekend_results'),
     openArticle: (url) => invoke('open_article', { url }),
     settings: () => invoke('get_settings'),
-    notch: () => Promise.resolve(null),
-    onNotch: noop,
+    notch: () => invoke('get_notch'),
+    onNotch: (cb) => on('island:notch', cb),
     demo: () => invoke('get_demo'),
     onDemo: (cb) => on('island:demo', cb),
     setInteractive: (v) => invoke('set_interactive', { on: !!v }),
-    dragStart: noop,
-    dragEnd: noop,
-    openMenu: noop,
-    setBig: () => Promise.resolve(),
+    dragStart: () => invoke('drag_start'),
+    dragEnd: () => invoke('drag_end'),
+    openMenu: () => invoke('open_menu'),
+    setBig: (on) => invoke('set_big', { on: !!on }),
     setRect: (rect) => invoke('report_rect', { rect }),
     rehover: () => invoke('rehover'),
     onHover: (cb) => on('hover', cb),
-    onRefresh: noop,
+    onRefresh: (cb) => on('f1:refresh', () => cb()),
     onLiveState: (cb) => {
       on('live:state', cb, (e) => e.payload.summary);
       invoke('live_state').then((p) => cb(p.summary));
     },
     onAlert: (cb) => on('live:alert', cb),
-    onToggle: noop,
-    onSummon: noop,
-    onBig: noop,
-    onBigAnchor: noop,
-    onBigGeometry: noop,
-    reportPinned: noop,
-    onSetPinned: noop,
+    onToggle: (cb) => on('island:toggle', () => cb()),
+    onSummon: (cb) => on('island:summon', () => cb()),
+    onBig: (cb) => on('island:big', () => cb()),
+    onBigAnchor: (cb) => on('island:big-anchor', cb),
+    onBigGeometry: (cb) => on('island:big-geometry', cb),
+    reportPinned: (v) => invoke('report_pinned', { on: !!v }),
+    onSetPinned: (cb) => on('island:set-pinned', cb),
     onSettings: (cb) => on('island:settings', cb),
     updateState: () => invoke('update_state'),
     onUpdate: (cb) => on('update:state', cb),
@@ -53,10 +52,10 @@
     analysis: {
       sessions: () => invoke('analysis_sessions'),
       get: (key) => invoke('analysis_get', { key }),
-      pick: unsupported('Analysis'),
+      pick: (key) => invoke('analysis_pick', { currentKey: key ?? null }),
       telemetry: (sessionKey, driver, lap) =>
         invoke('analysis_telemetry', { sessionKey, driver, lap }),
-      choose: unsupported('Menu'),
+      choose: (items) => invoke('choose', { items }),
       location: (sessionKey, driver, lap) =>
         invoke('analysis_location', { sessionKey, driver, lap }),
       replayInfo: (sessionKey) => invoke('replay_info', { sessionKey }),

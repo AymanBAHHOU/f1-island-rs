@@ -71,6 +71,11 @@ impl SettingsStore {
         self.current.lock().unwrap().clone()
     }
 
+    /// Changes the settings for this run only, without saving (for debugging flags).
+    pub fn update_in_memory(&self, change: impl FnOnce(&mut Settings)) {
+        change(&mut self.current.lock().unwrap());
+    }
+
     /// Changes the settings and saves them. Failing to save is not fatal: the change
     /// still holds until the app closes.
     pub fn update(&self, change: impl FnOnce(&mut Settings)) -> Settings {
