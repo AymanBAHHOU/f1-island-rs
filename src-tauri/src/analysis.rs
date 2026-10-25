@@ -48,6 +48,8 @@ struct Lap {
     speed_trap: Option<f64>,
     i1: Option<f64>,
     i2: Option<f64>,
+    /// When the lap started, in milliseconds since 1970.
+    start_ms: Option<i64>,
 }
 
 fn read_laps(laps: &Value) -> Vec<Lap> {
@@ -67,6 +69,7 @@ fn read_laps(laps: &Value) -> Vec<Lap> {
                 speed_trap: num(l, "st_speed"),
                 i1: num(l, "i1_speed"),
                 i2: num(l, "i2_speed"),
+                start_ms: text(l, "date_start").and_then(crate::results::parse_ms),
             })
         })
         .collect()
@@ -533,11 +536,52 @@ type TeamTyres = (String, Value, Vec<(String, i64)>);
 
 #[derive(Clone)]
 struct Best {
+    /// The qualifying segment (Q1, Q2, Q3) the lap was set in.
+    segment: Option<String>,
     time: f64,
     lap: i64,
     compound: String,
     tyre_age: Option<f64>,
     laps: usize,
+}
+
+/// The segments of a qualifying session: ("Q1", start, end) in milliseconds, found from the
+/// "SESSION STARTED" and "SESSION FINISHED" messages. Empty for other sessions.
+fn segments(session_name: &str, race_control: &Value) -> Vec<(String, i64, i64)> {
+    let prefix = if session_name.starts_with("Sprint") {
+        "SQ"
+    } else {
+        "Q"
+    };
+    if !(session_name.contains("Qualifying") || session_name.contains("Shootout")) {
+        return Vec::new();
+    }
+    let mut events: Vec<(i64, bool)> = rows(race_control)
+        .iter()
+        .filter(|m| text(m, "category") == Some("SessionStatus"))
+        .filter_map(|m| {
+            let at = crate::results::parse_ms(text(m, "date")?)?;
+            match message(m) {
+                "SESSION STARTED" => Some((at, true)),
+                "SESSION FINISHED" => Some((at, false)),
+                _ => None,
+            }
+        })
+        .collect();
+    events.sort_by_key(|e| e.0);
+    let mut out = Vec::new();
+    let mut open: Option<i64> = None;
+    for (at, started) in events {
+        match (started, open) {
+            (true, _) => open = Some(at),
+            (false, Some(start)) => {
+                out.push((format!("{prefix}{}", out.len() + 1), start, at));
+                open = None;
+            }
+            (false, None) => {}
+        }
+    }
+    out
 }
 
 /// What OpenF1 says about one session.
@@ -569,6 +613,7 @@ pub fn analyse(session: &Value, raw: &Raw) -> Value {
     }
 
     let deleted_by_car = deleted_lap_times(raw.race_control);
+    let quali_segments = segments(session_name, raw.race_control);
     let mut per_driver: Vec<(Map<String, Value>, Option<f64>)> = Vec::new();
     let mut best_by_driver: Vec<(i64, Option<Best>)> = Vec::new();
     let mut long_runs: Vec<Value> = Vec::new();
@@ -618,6 +663,12 @@ pub fn analyse(session: &Value, raw: &Raw) -> Value {
         let best = best_lap.map(|bl| {
             let st = stint_at(bl.number);
             Best {
+                segment: bl.start_ms.and_then(|t| {
+                    quali_segments
+                        .iter()
+                        .find(|(_, from, to)| t >= *from && t <= *to)
+                        .map(|(name, _, _)| name.clone())
+                }),
                 time: bl.duration.unwrap_or(0.0),
                 lap: bl.number,
                 compound: st.map_or("UNKNOWN", Stint::compound).to_string(),
@@ -676,7 +727,7 @@ pub fn analyse(session: &Value, raw: &Raw) -> Value {
             "best".into(),
             best.as_ref().map_or(Value::Null, |b| {
                 json!({"time": b.time, "lap": b.lap, "compound": b.compound,
-                       "tyreAge": jopt(b.tyre_age), "laps": b.laps})
+                       "tyreAge": jopt(b.tyre_age), "laps": b.laps, "segment": b.segment})
             }),
         );
         row.insert(
@@ -1000,6 +1051,40 @@ mod tests {
         assert_eq!(out[1]["phase"], 2);
         assert_eq!(out[2]["phase"], Value::Null);
         assert_eq!(out[2]["status"], "DNF");
+    }
+
+    #[test]
+    fn a_qualifying_best_lap_says_which_segment_it_was_set_in() {
+        let rc = json!([
+            {"date": "2026-10-24T21:00:00+00:00", "category": "SessionStatus", "message": "SESSION STARTED"},
+            {"date": "2026-10-24T21:18:00+00:00", "category": "SessionStatus", "message": "SESSION FINISHED"},
+            {"date": "2026-10-24T21:25:00+00:00", "category": "SessionStatus", "message": "SESSION STARTED"},
+            {"date": "2026-10-24T21:40:00+00:00", "category": "SessionStatus", "message": "SESSION FINISHED"},
+        ]);
+        let found = segments("Qualifying", &rc);
+        let names: Vec<_> = found.iter().map(|s| s.0.as_str()).collect();
+        assert_eq!(names, ["Q1", "Q2"]);
+        assert_eq!(segments("Sprint Qualifying", &rc)[0].0, "SQ1");
+        assert!(segments("Practice 1", &rc).is_empty());
+
+        let (drivers, _, stints, results, weather) = sample();
+        let laps = json!([
+            {"driver_number": 1, "lap_number": 2, "lap_duration": 90.0, "date_start": "2026-10-24T21:05:00+00:00"},
+            {"driver_number": 1, "lap_number": 6, "lap_duration": 91.0, "date_start": "2026-10-24T21:30:00+00:00"},
+        ]);
+        let session = json!({"session_name": "Qualifying"});
+        let out = analyse(
+            &session,
+            &Raw {
+                drivers: &drivers,
+                laps: &laps,
+                stints: &stints,
+                results: &results,
+                weather: &weather,
+                race_control: &rc,
+            },
+        );
+        assert_eq!(out["perDriver"][0]["best"]["segment"], "Q1");
     }
 
     #[test]

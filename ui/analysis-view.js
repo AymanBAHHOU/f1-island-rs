@@ -197,7 +197,7 @@ function viewShort(d) {
       label: `${driverCell(d.drivers[t.driver]?.code ?? t.driver, t.color, `<span class="muted">${esc(t.team)}</span>`)}`,
       color: t.color,
       gap: t.gap,
-      value: fmtLap(t.value),
+      value: `${fmtLap(t.value)}${t.entry.best?.segment ? ` · ${t.entry.best.segment}` : ''}`,
     }))
   );
 
@@ -213,7 +213,7 @@ function viewShort(d) {
       (r, i) => `<tr>
         <td class="num muted">${i + 1}</td>
         <td>${driverCell(r.code, r.color)}</td>
-        <td class="num">${fmtLap(r.best.time)}</td>
+        <td class="num">${fmtLap(r.best.time)}${r.best.segment ? ` <span class="muted">${r.best.segment}</span>` : ''}</td>
         <td class="num muted">${fmtGap(r.best.time - top)}</td>
         <td>${tyre(r.best.compound, r.best.tyreAge)}</td>
         ${sector(r.sectors[0], b1)}${sector(r.sectors[1], b2)}${sector(r.sectors[2], b3)}
@@ -223,7 +223,8 @@ function viewShort(d) {
     )
     .join('');
 
-  return `<p class="hint">Each driver's fastest lap. Softer tyres are quicker over one lap and fuel loads aren't public,
+  const quali = rows.some((r) => r.best.segment);
+  return `<p class="hint">${quali ? 'Each driver\'s fastest lap <b>across all qualifying segments</b> (the tag shows which one), so it can differ from the official order, which uses the last segment reached. ' : 'Each driver\'s fastest lap. '}Softer tyres are quicker over one lap and fuel loads aren't public,
       so check the tyre before comparing. <b>Ideal lap</b> adds up the driver's best three sectors; the last column is
       the time left on the table. Purple = fastest sector of the session.</p>
     <div class="grid single">
