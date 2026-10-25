@@ -473,8 +473,28 @@ pub async fn analysis_pick(
 
 // ---------- the tray ----------
 
+/// A checkered flag for the menu bar: a template image (only its shape counts), so it stays
+/// legible in light and dark menu bars. 36x36 pixels, for a 2x screen.
+fn flag_icon() -> Image<'static> {
+    let size = 36usize;
+    let mut rgba = vec![0u8; size * size * 4];
+    for y in 4..32 {
+        for x in 6..30 {
+            let pole = x < 9;
+            let flag = x >= 9 && y < 24 && ((x - 9) / 5 + (y - 4) / 5) % 2 == 0;
+            if pole || flag {
+                rgba[(y * size + x) * 4 + 3] = 255;
+            }
+        }
+    }
+    Image::new_owned(rgba, size as u32, size as u32)
+}
+
 /// 16x16 red dot for the tray.
 fn tray_icon() -> Image<'static> {
+    if os() == Os::Mac {
+        return flag_icon();
+    }
     let size = 16usize;
     let mut rgba = vec![0u8; size * size * 4];
     for y in 0..size {
@@ -501,6 +521,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
     };
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(tray_icon())
+        .icon_as_template(mac)
         .tooltip(tooltip)
         .menu(&build_menu(app, false)?)
         // On macOS the left click opens the menu. Toggling as well would expand and
