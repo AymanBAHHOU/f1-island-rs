@@ -24,7 +24,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 const BASE: &str = "https://livetiming.formula1.com/signalrcore";
 /// The topics that work without an F1 TV account.
-const TOPICS: [&str; 10] = [
+const TOPICS: [&str; 11] = [
     "Heartbeat",
     "SessionInfo",
     "SessionStatus",
@@ -35,6 +35,7 @@ const TOPICS: [&str; 10] = [
     "DriverList",
     "LapCount",
     "ExtrapolatedClock",
+    "PitLaneTimeCollection", // how long each pit stop took in the pit lane
 ];
 /// SignalR ends each message with this character, so one WebSocket frame can hold several.
 const RECORD_SEPARATOR: char = '\u{1e}';

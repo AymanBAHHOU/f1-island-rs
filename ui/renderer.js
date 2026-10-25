@@ -480,6 +480,17 @@ const lapSeconds = (t) => {
 const sectorCell = (s) =>
   `<span class="t-time sec${s?.overall ? ' overall' : s?.pb ? ' pb' : ''}${s?.previous ? ' prev' : ''}">${esc(s?.value || '')}</span>`;
 
+// Small tags beside a driver: stewards' penalties, open investigations, warnings.
+const tagsHtml = (tags) =>
+  (tags || []).map((t) => `<b class="t-tag ${esc(t.kind)}" title="${esc(tagTitle(t.text))}">${esc(t.text)}</b>`).join('');
+const tagTitle = (text) =>
+  ({ INV: 'Under investigation', 'B/W': 'Black and white flag (a warning)', REP: 'Reprimand', DT: 'Drive-through penalty', DSQ: 'Disqualified' })[text] ||
+  (/^S\/G/.test(text) ? 'Stop-go penalty' : /^\+/.test(text) ? 'Time penalty, added to the race time' : text);
+
+// Pit stops in a race: how many, and how long the latest took in the pit lane.
+const pitsHtml = (r) =>
+  `<span class="t-pits">${esc(r.pits ?? 0)}${r.pitTime ? ` <small title="Time in the pit lane${r.pitLap ? `, lap ${esc(r.pitLap)}` : ''}">${esc(r.pitTime)}s</small>` : ''}</span>`;
+
 // The full running order for the Live page: gaps, last and best lap, sectors
 // and tyre in one table. 'compact' (default for previews) is just gaps and tyre.
 function towerHtml(rows, kind, cls, view = 'compact') {
@@ -493,17 +504,17 @@ function towerHtml(rows, kind, cls, view = 'compact') {
         const gap = r.pos === 1 ? '' : gapText(r.gap);
         const best = lapSeconds(r.best);
         return `<li class="${r.out || r.knockedOut ? 'dim' : ''}">
-          <span class="pos">${esc(r.pos)}</span>${teamBar(null, r.color)}<span class="code">${esc(r.code)}</span>
+          <span class="pos">${esc(r.pos)}</span>${teamBar(null, r.color)}<span class="code">${esc(r.code)}</span><span class="t-tags">${tagsHtml(r.tags)}</span>
           <span class="t-main">${badge ? `<b class="t-badge ${badge.toLowerCase()}">${badge}</b>` : esc(interval)}</span>
           <span class="t-second">${esc(gap)}</span>
           ${timeCell(r.lastLap)}${[0, 1, 2].map((i) => sectorCell(r.sectors?.[i])).join('')}
           <span class="t-time best${best != null && best === fastest ? ' overall' : ''}">${esc(r.best || '')}</span>
-          ${towerTyre(r.tyre)}
+          ${race ? pitsHtml(r) : ''}${towerTyre(r.tyre)}
         </li>`;
       })
       .join('');
-    const head = ['Int.', 'Gap', 'Last lap', 'S1', 'S2', 'S3', 'Best lap', 'Tyre'];
-    return `<div class="tower full ${cls}"><div class="tower-head"><span></span><span></span><span></span>${head
+    const head = ['Int.', 'Gap', 'Last lap', 'S1', 'S2', 'S3', 'Best lap', ...(race ? ['Pits'] : []), 'Tyre'];
+    return `<div class="tower full ${race ? 'with-pits ' : ''}${cls}"><div class="tower-head"><span></span><span></span><span></span><span></span>${head
       .map((h) => `<span>${h}</span>`)
       .join('')}</div><ul>${body}</ul></div>`;
   }
