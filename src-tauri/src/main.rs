@@ -10,7 +10,10 @@ mod live;
 use f1_island::circuit::CircuitHistory;
 use f1_island::jolpica::Jolpica;
 use f1_island::news::{self, News};
+use f1_island::openf1::OpenF1;
+use f1_island::results::{self, Results};
 use f1_island::schedule::Weekend;
+use f1_island::snapshot::Snapshots;
 use f1_island::standings::Standings;
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -76,6 +79,40 @@ fn open_article(url: String, news: tauri::State<News>) {
     }
 }
 
+// The whole snapshot the island shows (weekend, standings, title fight, circuit).
+#[tauri::command]
+async fn snapshot(
+    extras: Option<bool>,
+    jolpica: tauri::State<'_, Jolpica>,
+    openf1: tauri::State<'_, OpenF1>,
+    snapshots: tauri::State<'_, Snapshots>,
+) -> Result<serde_json::Value, String> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    Ok(snapshots
+        .build(&jolpica, &openf1, now_ms, extras.unwrap_or(true))
+        .await)
+}
+
+// The top three of each finished session of this weekend.
+#[tauri::command]
+async fn weekend_results(
+    jolpica: tauri::State<'_, Jolpica>,
+    openf1: tauri::State<'_, OpenF1>,
+    results: tauri::State<'_, Results>,
+) -> Result<Vec<results::Entry>, String> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let weekend = jolpica.weekend(now_ms).await.map_err(|e| e.to_string())?;
+    let Some(weekend) = weekend else {
+        return Ok(Vec::new());
+    };
+    let (Some(first), Some(last)) = (weekend.sessions.first(), weekend.sessions.last()) else {
+        return Ok(Vec::new());
+    };
+    results
+        .weekend(&openf1, first.start_ms, last.end_ms, now_ms)
+        .await
+}
+
 // ---------- where the island is, so we know when the mouse is over it ----------
 
 // The page tells us the island's rectangle (in CSS pixels, relative to the window).
@@ -125,6 +162,9 @@ fn main() {
         .manage(HitRect::default())
         .manage(Hovering::default())
         .manage(News::default())
+        .manage(OpenF1::default())
+        .manage(Results::default())
+        .manage(Snapshots::default())
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -136,12 +176,19 @@ fn main() {
             set_interactive,
             rehover,
             news,
-            open_article
+            open_article,
+            weekend_results,
+            snapshot
         ])
         .setup(|app| {
             let win = app
                 .get_webview_window("main")
                 .expect("the window from tauri.conf.json");
+            // OpenF1 answers are kept on disk, so sessions already opened keep working
+            // while a live session blocks the free API.
+            if let Ok(dir) = app.path().app_data_dir() {
+                app.state::<OpenF1>().set_cache_dir(&dir.join("openf1"));
+            }
 
             // Centre the window horizontally at the top of the monitor it's on.
             if let Some(monitor) = win.current_monitor()? {

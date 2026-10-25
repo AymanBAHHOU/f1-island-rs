@@ -98,7 +98,20 @@ pub struct Race {
 }
 
 impl Race {
-    fn race_start_ms(&self) -> Option<i64> {
+    pub fn round(&self) -> &str {
+        &self.round
+    }
+
+    pub fn name(&self) -> &str {
+        &self.race_name
+    }
+
+    /// When the Sprint starts, if this weekend has one.
+    pub fn sprint_start_ms(&self) -> Option<i64> {
+        self.sprint.as_ref().and_then(Slot::start_ms)
+    }
+
+    pub fn race_start_ms(&self) -> Option<i64> {
         Slot {
             date: self.date.clone(),
             time: self.time.clone(),

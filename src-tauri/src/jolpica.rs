@@ -4,8 +4,11 @@
 //! and answers are cached so the same URL isn't asked for twice.
 //! (Port of `getJson` in the Electron app's `src/data.js`.)
 
+use crate::championship::Kind;
+use crate::championship::SeasonResult;
 use crate::circuit::{parse_visit, parse_winners, total_winners, CircuitHistory};
-use crate::schedule::{parse_schedule, pick_weekend, Weekend};
+use crate::schedule::{parse_schedule, pick_weekend, Race, Weekend};
+use crate::season::parse_season_results;
 use crate::standings::{parse_constructors, parse_drivers, parse_last_race, Standings};
 use std::collections::HashMap;
 use std::fmt;
@@ -23,6 +26,8 @@ const RETRIES: u32 = 3;
 const SCHEDULE_TTL: Duration = Duration::from_secs(6 * 3600);
 /// Standings and results change after each race (and lag a little behind it).
 const STANDINGS_TTL: Duration = Duration::from_secs(10 * 60);
+/// Results of this season's races, which only grow after a race.
+const SEASON_TTL: Duration = Duration::from_secs(3600);
 /// Past winners of a circuit only change when a race is run there.
 const CIRCUIT_TTL: Duration = Duration::from_secs(12 * 3600);
 /// Results of a race that is already over.
@@ -163,6 +168,35 @@ impl Jolpica {
                 .text()
                 .await
                 .map_err(|e| FetchError::Network(e.to_string()));
+        }
+    }
+
+    /// The season's calendar.
+    pub async fn races(&self) -> Result<Vec<Race>, FetchError> {
+        let text = self.get("current.json?limit=100", SCHEDULE_TTL).await?;
+        parse_schedule(&text).map_err(parse_error)
+    }
+
+    /// Every race (or Sprint) result of the season so far, for each driver's form.
+    /// Jolpica pages its answers, so this asks until it has them all.
+    pub async fn season_results(&self, sprint: bool) -> Result<Vec<SeasonResult>, FetchError> {
+        let file = if sprint { "sprint" } else { "results" };
+        let kind = if sprint { Kind::Sprint } else { Kind::Race };
+        let mut all = Vec::new();
+        let mut offset = 0;
+        loop {
+            let text = self
+                .get(
+                    &format!("current/{file}.json?limit=100&offset={offset}"),
+                    SEASON_TTL,
+                )
+                .await?;
+            let page = parse_season_results(&text, kind).map_err(parse_error)?;
+            all.extend(page.rows);
+            offset += 100;
+            if offset >= page.total {
+                return Ok(all);
+            }
         }
     }
 
