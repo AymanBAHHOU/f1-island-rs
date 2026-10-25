@@ -2,9 +2,15 @@
 //! entry follow this state. (Port of the "notify" way in the Electron app's
 //! `src/updater.js`: ask GitHub for the latest release, and offer its page.)
 //!
-//! Installing an update by itself (the "auto" way) comes with the installer and signing
-//! work, later; it will plug in where `check` asks GitHub.
+//! Three ways, by how the app was installed:
+//! - **Auto**: the Windows installer. The app downloads a newer signed release in the
+//!   background and installs it when asked ("Restart to update"). That part is done by
+//!   Tauri's updater plugin (see `self_update.rs`); this file holds what the page shows.
+//! - **Notify**: everything else that is packaged (the portable Windows exe, macOS): these
+//!   can't replace themselves, so a newer release is announced with a link to its page.
+//! - **Off**: a development build.
 
+use crate::platform::Os;
 use crate::version::{is_newer, parse_version};
 use serde::Serialize;
 use serde_json::Value;
@@ -12,6 +18,24 @@ use std::sync::Mutex;
 
 pub const REPO: &str = "AymanBAHHOU/f1-island-rs";
 pub const RELEASES_URL: &str = "https://github.com/AymanBAHHOU/f1-island-rs/releases/latest";
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Mode {
+    Off,
+    Notify,
+    Auto,
+}
+
+/// How this copy of the app updates. `installed`: it runs from where the installer put it.
+pub fn update_mode(debug_build: bool, os: Os, installed: bool) -> Mode {
+    if debug_build {
+        Mode::Off
+    } else if os == Os::Windows && installed {
+        Mode::Auto
+    } else {
+        Mode::Notify
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -83,11 +107,14 @@ pub enum Act {
     Open(String),
     /// Look for an update now.
     Check,
+    /// Install the downloaded update and restart.
+    Install,
     Nothing,
 }
 
 pub fn act(state: &State) -> Act {
     match (state.status, &state.url) {
+        (Status::Ready, _) => Act::Install,
         (Status::Available, Some(url)) => Act::Open(url.clone()),
         (Status::Idle, _) => Act::Check,
         _ => Act::Nothing,
@@ -98,6 +125,7 @@ pub struct Updater {
     current: String,
     http: reqwest::Client,
     state: Mutex<State>,
+    mode: Mutex<Mode>,
 }
 
 impl Updater {
@@ -110,7 +138,16 @@ impl Updater {
                 .build()
                 .expect("a plain HTTP client can always be built"),
             state: Mutex::new(State::default()),
+            mode: Mutex::new(Mode::Off),
         }
+    }
+
+    pub fn mode(&self) -> Mode {
+        *self.mode.lock().unwrap()
+    }
+
+    pub fn set_mode(&self, mode: Mode) {
+        *self.mode.lock().unwrap() = mode;
     }
 
     pub fn state(&self) -> State {
@@ -201,11 +238,25 @@ mod tests {
         );
         assert_eq!(act(&available), Act::Open("https://github.com/a/b".into()));
         assert_eq!(act(&State::default()), Act::Check);
+        let ready = State {
+            status: Status::Ready,
+            ..State::default()
+        };
+        assert_eq!(act(&ready), Act::Install);
         let busy = State {
             status: Status::Downloading,
             ..State::default()
         };
         assert_eq!(act(&busy), Act::Nothing);
+    }
+
+    #[test]
+    fn how_an_app_updates_depends_on_how_it_was_installed() {
+        assert_eq!(update_mode(true, Os::Windows, true), Mode::Off);
+        assert_eq!(update_mode(false, Os::Windows, true), Mode::Auto);
+        assert_eq!(update_mode(false, Os::Windows, false), Mode::Notify); // portable
+        assert_eq!(update_mode(false, Os::Mac, true), Mode::Notify);
+        assert_eq!(update_mode(false, Os::Linux, true), Mode::Notify);
     }
 
     #[test]

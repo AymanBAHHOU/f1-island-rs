@@ -79,14 +79,36 @@ fn build_menu(app: &AppHandle, from_island: bool) -> tauri::Result<Menu<tauri::W
         )?)?;
     }
 
-    menu.append(&CheckMenuItem::with_id(
-        app,
-        "autohide",
-        "Auto-hide until hovered",
-        true,
-        settings.auto_hide,
-        None::<&str>,
-    )?)?;
+    if mac && shell::is_attached(app) {
+        // Hanging from the notch, "hidden" means notch only; otherwise stretched.
+        let idle = Submenu::with_id(app, "idle-menu", "Idle appearance", true)?;
+        idle.append(&CheckMenuItem::with_id(
+            app,
+            "idle:notch",
+            "Notch only",
+            true,
+            settings.auto_hide,
+            None::<&str>,
+        )?)?;
+        idle.append(&CheckMenuItem::with_id(
+            app,
+            "idle:stretched",
+            "Stretched",
+            true,
+            !settings.auto_hide,
+            None::<&str>,
+        )?)?;
+        menu.append(&idle)?;
+    } else {
+        menu.append(&CheckMenuItem::with_id(
+            app,
+            "autohide",
+            "Auto-hide until hovered",
+            true,
+            settings.auto_hide,
+            None::<&str>,
+        )?)?;
+    }
     if !mac {
         menu.append(&CheckMenuItem::with_id(
             app,
@@ -191,7 +213,11 @@ fn build_menu(app: &AppHandle, from_island: bool) -> tauri::Result<Menu<tauri::W
 /// The menu entry follows the updater: check, wait for a download, restart to install, or
 /// open the download page.
 fn update_item(app: &AppHandle) -> tauri::Result<MenuItem<tauri::Wry>> {
-    let state = app.state::<Updater>().state();
+    let updater = app.state::<Updater>();
+    if updater.mode() == updater::Mode::Off {
+        return MenuItem::with_id(app, "update", "Check for updates", false, None::<&str>);
+    }
+    let state = updater.state();
     let version = state.version.clone().unwrap_or_default();
     let (label, enabled) = match state.status {
         updater::Status::Ready => (format!("Restart to update to v{version}"), true),
@@ -214,6 +240,13 @@ pub fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         if let Some((tx, values)) = app.state::<Choices>().pending.lock().unwrap().take() {
             let _ = tx.send(values.get(choice).cloned());
         }
+        return;
+    }
+    if let Some(idle) = id.strip_prefix("idle:") {
+        let updated = settings.update(|s| s.auto_hide = idle == "notch");
+        crate::set_demo(app, None);
+        let _ = app.emit("island:settings", updated);
+        refresh_tray_menu(app);
         return;
     }
     if let Some(mode) = id.strip_prefix("demo:") {
