@@ -15,15 +15,26 @@
           <span class="c-label" id="cLabel">F1</span>
           <span class="c-right" id="cRight">Loading…</span>
         </div>
-        <div class="expanded">
+        <div class="expanded" id="expanded">
           <div class="eyebrow" id="eyebrow">Formula 1</div>
           <h1 id="title">Loading…</h1>
           <div class="sub" id="subtitle"></div>
-          <div class="hero">
-            <div><small id="nextLabel">Next up</small><strong id="next"></strong></div>
-            <div class="count" id="count">--:--:--</div>
-          </div>
-          <ul class="sessions" id="sessions"></ul>
+          <nav class="pages" id="pages">
+            <button data-page="weekend" class="active">Weekend</button>
+            <button data-page="standings">Standings</button>
+            <button data-page="circuit">Circuit</button>
+          </nav>
+
+          <section id="page-weekend">
+            <div class="hero">
+              <div><small id="nextLabel">Next up</small><strong id="next"></strong></div>
+              <div class="count" id="count">--:--:--</div>
+            </div>
+            <ul class="sessions" id="sessions"></ul>
+          </section>
+
+          <section id="page-standings" hidden></section>
+          <section id="page-circuit" hidden></section>
         </div>
       </div>
     </div>

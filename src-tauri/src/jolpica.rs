@@ -4,7 +4,9 @@
 //! and answers are cached so the same URL isn't asked for twice.
 //! (Port of `getJson` in the Electron app's `src/data.js`.)
 
+use crate::circuit::{parse_visit, parse_winners, total_winners, CircuitHistory};
 use crate::schedule::{parse_schedule, pick_weekend, Weekend};
+use crate::standings::{parse_constructors, parse_drivers, parse_last_race, Standings};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Mutex;
@@ -19,6 +21,12 @@ const GAP: Duration = Duration::from_millis(350);
 const RETRIES: u32 = 3;
 /// The calendar rarely changes.
 const SCHEDULE_TTL: Duration = Duration::from_secs(6 * 3600);
+/// Standings and results change after each race (and lag a little behind it).
+const STANDINGS_TTL: Duration = Duration::from_secs(10 * 60);
+/// Past winners of a circuit only change when a race is run there.
+const CIRCUIT_TTL: Duration = Duration::from_secs(12 * 3600);
+/// Results of a race that is already over.
+const PAST_TTL: Duration = Duration::from_secs(24 * 3600);
 
 /// What can go wrong when fetching. An `enum` again: each way to fail is its own case.
 #[derive(Debug)]
@@ -161,9 +169,102 @@ impl Jolpica {
     /// The weekend to show at `now_ms`, from the season's calendar.
     pub async fn weekend(&self, now_ms: i64) -> Result<Option<Weekend>, FetchError> {
         let text = self.get("current.json?limit=100", SCHEDULE_TTL).await?;
-        let races = parse_schedule(&text).map_err(|e| FetchError::Parse(e.to_string()))?;
+        let races = parse_schedule(&text).map_err(parse_error)?;
         Ok(pick_weekend(&races, now_ms))
     }
+
+    /// The championship tables and the last race's podium. The three requests are
+    /// independent: if one fails the others still show, and only if all three fail is
+    /// that an error.
+    pub async fn standings(&self) -> Result<Standings, FetchError> {
+        let drivers = self
+            .get("current/driverStandings.json?limit=40", STANDINGS_TTL)
+            .await;
+        let teams = self
+            .get("current/constructorStandings.json?limit=11", STANDINGS_TTL)
+            .await;
+        let last = self
+            .get("current/last/results.json?limit=3", STANDINGS_TTL)
+            .await;
+
+        // Match on all three answers at once: only "all three failed" is an error.
+        match (drivers, teams, last) {
+            (Err(err), Err(_), Err(_)) => Err(err),
+            // Otherwise, for each part: no answer, or one we can't read, is simply
+            // "nothing to show".
+            (drivers, teams, last) => Ok(Standings {
+                drivers: drivers.ok().and_then(|t| parse_drivers(&t).ok().flatten()),
+                constructors: teams
+                    .ok()
+                    .and_then(|t| parse_constructors(&t).ok())
+                    .unwrap_or_default(),
+                last_race: last.ok().and_then(|t| parse_last_race(&t).ok().flatten()),
+            }),
+        }
+    }
+
+    /// A circuit's recent winners and the recap of the last race held there before
+    /// `season`.
+    pub async fn circuit_history(
+        &self,
+        circuit_id: &str,
+        season: u32,
+    ) -> Result<CircuitHistory, FetchError> {
+        // The id goes into a web address, so only plain characters are allowed.
+        if circuit_id.is_empty()
+            || !circuit_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(FetchError::Parse(format!(
+                "not a circuit id: {circuit_id:?}"
+            )));
+        }
+
+        // Jolpica lists winners oldest first, so ask how many there are, then for the last few.
+        let head = self
+            .get(
+                &format!("circuits/{circuit_id}/results/1.json?limit=1"),
+                CIRCUIT_TTL,
+            )
+            .await?;
+        let total = total_winners(&head).map_err(parse_error)?;
+        let offset = total.saturating_sub(6);
+        let page = self
+            .get(
+                &format!("circuits/{circuit_id}/results/1.json?limit=6&offset={offset}"),
+                CIRCUIT_TTL,
+            )
+            .await?;
+        let winners = parse_winners(&page, season).map_err(parse_error)?;
+
+        let Some(last_season) = winners.first().map(|w| w.season.clone()) else {
+            return Ok(CircuitHistory {
+                winners,
+                last: None,
+            }); // never raced here before
+        };
+        let results = self
+            .get(
+                &format!("{last_season}/circuits/{circuit_id}/results.json?limit=40"),
+                PAST_TTL,
+            )
+            .await?;
+        // Qualifying is optional: if it can't be had, the recap just has no pole.
+        let quali = self
+            .get(
+                &format!("{last_season}/circuits/{circuit_id}/qualifying.json?limit=40"),
+                PAST_TTL,
+            )
+            .await
+            .ok();
+        let last = parse_visit(&results, quali.as_deref()).map_err(parse_error)?;
+        Ok(CircuitHistory { winners, last })
+    }
+}
+
+fn parse_error(e: serde_json::Error) -> FetchError {
+    FetchError::Parse(e.to_string())
 }
 
 #[cfg(test)]
@@ -227,8 +328,58 @@ mod tests {
             .contains("timed out"));
     }
 
-    // The next two touch the network, so they only run on request:
-    //     cargo test --lib -- --ignored
+    // A bad id is refused before any request is made, so this one needs no network.
+    #[tokio::test]
+    async fn a_circuit_id_with_odd_characters_is_refused() {
+        let client = Jolpica::new();
+        for bad in ["", "../etc", "americas/../x", "a b", "amé", "americas?x=1"] {
+            let err = client.circuit_history(bad, 2026).await.unwrap_err();
+            assert!(matches!(err, FetchError::Parse(_)), "{bad:?} gave {err}");
+        }
+    }
+
+    // The tests below touch the network, so they only run on request:
+    //     cargo test --lib -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "needs the network"]
+    async fn the_real_standings_have_a_table_and_a_podium() {
+        let standings = Jolpica::new().standings().await.expect("standings load");
+        let drivers = standings.drivers.expect("a drivers table");
+        assert!(!drivers.rows.is_empty() && drivers.rows.len() <= 10);
+        assert!(!standings.constructors.is_empty());
+        let last = standings.last_race.expect("a last race");
+        assert_eq!(last.podium.len(), 3);
+        println!(
+            "round {}: leader {} ({} pts); last race {}: {:?}",
+            drivers.round,
+            drivers.rows[0].code,
+            drivers.rows[0].points,
+            last.name,
+            last.podium.iter().map(|p| &p.code).collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs the network"]
+    async fn the_real_history_of_the_circuit_of_the_americas() {
+        let history = Jolpica::new()
+            .circuit_history("americas", 2026)
+            .await
+            .expect("history loads");
+        assert_eq!(history.winners.len(), 5);
+        let last = history.last.expect("a recap of the last race");
+        assert_eq!(last.podium.len(), 3);
+        println!(
+            "{} winners; last: {} {} podium {:?}, pole {:?}, fastest {:?}, time {:?}",
+            history.winners.len(),
+            last.season,
+            last.name,
+            last.podium.iter().map(|p| &p.code).collect::<Vec<_>>(),
+            last.pole,
+            last.fastest_lap,
+            last.winner_time
+        );
+    }
     #[tokio::test]
     #[ignore = "needs the network"]
     async fn the_real_calendar_gives_a_weekend() {

@@ -5,8 +5,10 @@
 // In release builds, don't open a console window next to the app (Windows only).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use f1_island::circuit::CircuitHistory;
 use f1_island::jolpica::Jolpica;
 use f1_island::schedule::Weekend;
+use f1_island::standings::Standings;
 use serde::Deserialize;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -31,6 +33,29 @@ const TOP_GAP: f64 = 8.0;
 async fn weekend(jolpica: tauri::State<'_, Jolpica>) -> Result<Option<Weekend>, String> {
     let now_ms = chrono::Utc::now().timestamp_millis();
     jolpica.weekend(now_ms).await.map_err(|e| e.to_string())
+}
+
+// The championship tables and the last race's podium.
+#[tauri::command]
+async fn standings(jolpica: tauri::State<'_, Jolpica>) -> Result<Standings, String> {
+    jolpica.standings().await.map_err(|e| e.to_string())
+}
+
+// Commands can take arguments: the page sends `{ circuitId, season }` and Tauri turns
+// those camelCase names into these snake_case parameters.
+#[tauri::command]
+async fn circuit_history(
+    jolpica: tauri::State<'_, Jolpica>,
+    circuit_id: String,
+    season: String,
+) -> Result<CircuitHistory, String> {
+    let season: u32 = season
+        .parse()
+        .map_err(|_| format!("not a season: {season:?}"))?;
+    jolpica
+        .circuit_history(&circuit_id, season)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ---------- where the island is, so we know when the mouse is over it ----------
@@ -61,7 +86,12 @@ fn main() {
     tauri::Builder::default()
         .manage(HitRect::default())
         .manage(Jolpica::new())
-        .invoke_handler(tauri::generate_handler![weekend, report_rect])
+        .invoke_handler(tauri::generate_handler![
+            weekend,
+            standings,
+            circuit_history,
+            report_rect
+        ])
         .setup(|app| {
             let win = app
                 .get_webview_window("main")
