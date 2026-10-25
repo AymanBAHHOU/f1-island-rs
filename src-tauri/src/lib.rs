@@ -22,6 +22,7 @@ pub mod merge;
 pub mod news;
 pub mod notch;
 pub mod openf1;
+pub mod penalties;
 pub mod platform;
 pub mod results;
 pub mod schedule;

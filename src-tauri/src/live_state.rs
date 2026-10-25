@@ -8,6 +8,7 @@
 //! type 7 says the server is closing the connection.
 
 use crate::merge::merge_into;
+use crate::penalties::Tag;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashSet;
@@ -105,6 +106,11 @@ pub struct Row {
     pub sectors: Vec<Timed>,
     pub laps: Option<i64>,
     pub pits: i64,
+    /// How long the latest pit stop took in the pit lane, in seconds (text), and its lap.
+    pub pit_time: Option<String>,
+    pub pit_lap: Option<i64>,
+    /// Penalties, investigations and warnings from the stewards.
+    pub tags: Vec<Tag>,
     pub in_pit: bool,
     pub pit_out: bool,
     pub out: bool,
@@ -337,6 +343,8 @@ impl LiveState {
         let empty = Value::Null;
         let drivers = self.at("/DriverList").unwrap_or(&empty);
         let tyres = self.at("/TimingAppData/Lines").unwrap_or(&empty);
+        let tags = crate::penalties::tags_by_car(&self.messages());
+        let pit_times = self.at("/PitLaneTimeCollection/PitTimes").unwrap_or(&empty);
 
         let Some(Value::Object(lines)) = self.at("/TimingData/Lines") else {
             return Vec::new();
@@ -400,6 +408,17 @@ impl LiveState {
                         .get("NumberOfPitStops")
                         .and_then(Value::as_i64)
                         .unwrap_or(0),
+                    pit_time: pit_times.get(num).and_then(|p| match p.get("Duration") {
+                        Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                        Some(Value::Number(n)) => Some(n.to_string()),
+                        _ => None,
+                    }),
+                    pit_lap: pit_times
+                        .get(num)
+                        .and_then(|p| p.get("Lap"))
+                        .and_then(as_u32)
+                        .map(i64::from),
+                    tags: tags.get(num).cloned().unwrap_or_default(),
                     in_pit: truthy(l.get("InPit")),
                     pit_out: truthy(l.get("PitOut")),
                     out: truthy(l.get("Retired")) || truthy(l.get("Stopped")),

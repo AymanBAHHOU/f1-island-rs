@@ -1554,12 +1554,12 @@ h2.spaced {
 /* Live page: Gaps / Laps switch and the lap-times view. */
 /* The Live tab, wide: the table on the left, race control on the right. */
 #island.wide {
-  --expanded-w: 860px;
+  --expanded-w: 892px;
 }
 
 .live-page.live-wide {
   display: grid;
-  grid-template-columns: 512px minmax(0, 1fr);
+  grid-template-columns: 560px minmax(0, 1fr);
   gap: 22px;
   max-height: none;
   overflow: visible;
@@ -1616,16 +1616,69 @@ h2.spaced {
 /* The Live page's table: gaps, last and best lap, sectors and tyre in one. */
 .tower.full .tower-head,
 .tower.full li {
-  grid-template-columns: 16px 3px 34px minmax(44px, 1fr) minmax(44px, 1fr) 54px 40px 40px 40px 54px 34px;
-  gap: 5px;
+  grid-template-columns: 16px 3px 34px 54px minmax(40px, 1fr) minmax(40px, 1fr) 52px 40px 40px 40px 52px 32px;
+  gap: 4px;
 }
 
-.tower.full .tower-head span:nth-child(n + 4) {
+/* Races add a column for pit stops. */
+.tower.full.with-pits .tower-head,
+.tower.full.with-pits li {
+  grid-template-columns: 16px 3px 34px 54px minmax(40px, 1fr) minmax(40px, 1fr) 52px 40px 40px 40px 52px 50px 32px;
+}
+
+.tower.full .tower-head span:nth-child(n + 5) {
   text-align: right;
 }
 
-.tower.full .tower-head span:nth-child(4) {
+.tower.full .tower-head span:nth-child(5) {
   text-align: left;
+}
+
+/* Penalties, investigations and warnings beside the driver. */
+.t-tags {
+  display: flex;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.t-tag {
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--fg);
+}
+
+.t-tag.penalty {
+  background: rgba(255, 69, 58, 0.22);
+  color: #ff6b61;
+}
+
+.t-tag.investigation {
+  background: rgba(255, 214, 10, 0.2);
+  color: #ffd60a;
+}
+
+.t-tag.warning {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--muted);
+}
+
+/* Pit stops: how many, and the latest one's time in the pit lane. */
+.t-pits {
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.t-pits small {
+  color: var(--fg);
+  font-size: 10px;
 }
 
 .tower.full .t-time,
