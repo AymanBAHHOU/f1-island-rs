@@ -10,49 +10,9 @@
   };
   const unsupported = (what) => () => Promise.reject(new Error(`${what} is not available yet`));
   const noop = () => {};
-  const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 
-  async function snapshot(opts = {}) {
-    const result = {
-      fetchedAt: Date.now(),
-      weekend: null,
-      lastRace: null,
-      standings: null,
-      constructors: null,
-      circuit: null,
-      title: null,
-      error: null,
-    };
-    try {
-      const [weekend, standings] = await Promise.all([
-        invoke('weekend'),
-        invoke('standings'),
-      ]);
-      if (weekend) {
-        weekend.sessions = weekend.sessions.map((s) => ({
-          ...s,
-          start: iso(s.startMs),
-          end: iso(s.endMs),
-        }));
-      }
-      result.weekend = weekend;
-      if (standings) {
-        result.lastRace = standings.lastRace ?? null;
-        result.standings = standings.drivers ? standings.drivers.rows : [];
-        result.constructors = standings.constructors ?? [];
-      }
-      if (opts.extras === false) {
-        result.extrasPending = true;
-      } else if (weekend && weekend.circuitId) {
-        result.circuit = await invoke('circuit_history', { circuitId: weekend.circuitId, season: weekend.season }).catch(
-          () => null,
-        );
-      }
-    } catch (err) {
-      result.error = String(err);
-    }
-    return result;
-  }
+  // The weekend, standings, title fight and circuit history, all put together in Rust.
+  const snapshot = (opts = {}) => invoke('snapshot', { extras: opts.extras !== false });
 
   window.f1 = {
     snapshot,

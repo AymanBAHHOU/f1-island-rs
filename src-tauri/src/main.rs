@@ -13,6 +13,7 @@ use f1_island::news::{self, News};
 use f1_island::openf1::OpenF1;
 use f1_island::results::{self, Results};
 use f1_island::schedule::Weekend;
+use f1_island::snapshot::Snapshots;
 use f1_island::standings::Standings;
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -76,6 +77,20 @@ fn open_article(url: String, news: tauri::State<News>) {
     if news.is_known_link(&url) {
         let _ = open::that(url);
     }
+}
+
+// The whole snapshot the island shows (weekend, standings, title fight, circuit).
+#[tauri::command]
+async fn snapshot(
+    extras: Option<bool>,
+    jolpica: tauri::State<'_, Jolpica>,
+    openf1: tauri::State<'_, OpenF1>,
+    snapshots: tauri::State<'_, Snapshots>,
+) -> Result<serde_json::Value, String> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    Ok(snapshots
+        .build(&jolpica, &openf1, now_ms, extras.unwrap_or(true))
+        .await)
 }
 
 // The top three of each finished session of this weekend.
@@ -149,6 +164,7 @@ fn main() {
         .manage(News::default())
         .manage(OpenF1::default())
         .manage(Results::default())
+        .manage(Snapshots::default())
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -161,7 +177,8 @@ fn main() {
             rehover,
             news,
             open_article,
-            weekend_results
+            weekend_results,
+            snapshot
         ])
         .setup(|app| {
             let win = app

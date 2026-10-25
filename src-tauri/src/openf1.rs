@@ -6,9 +6,10 @@
 //! answer is also kept on disk and used when the network says no.
 
 use serde_json::Value;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 const BASE: &str = "https://api.openf1.org/v1";
 const GAP: Duration = Duration::from_millis(350);
@@ -48,6 +49,8 @@ pub struct OpenF1 {
     /// Held while a request is in flight (and for the gap after), so requests queue up.
     gate: tokio::sync::Mutex<()>,
     cache_dir: Mutex<Option<PathBuf>>,
+    /// Recent answers kept in memory, for callers that ask the same thing again and again.
+    memo: Mutex<HashMap<String, (Instant, Value)>>,
 }
 
 impl Default for OpenF1 {
@@ -60,6 +63,7 @@ impl Default for OpenF1 {
                 .expect("a plain HTTP client can always be built"),
             gate: tokio::sync::Mutex::new(()),
             cache_dir: Mutex::new(None),
+            memo: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -105,6 +109,21 @@ impl OpenF1 {
             return None;
         }
         self.read_cache(query)
+    }
+
+    /// Like `get`, but an answer younger than `ttl` is reused without asking again.
+    pub async fn get_for(&self, query: &str, ttl: Duration) -> Result<Value, String> {
+        if let Some((at, data)) = self.memo.lock().unwrap().get(query) {
+            if at.elapsed() < ttl {
+                return Ok(data.clone());
+            }
+        }
+        let data = self.get(query, None).await?;
+        self.memo
+            .lock()
+            .unwrap()
+            .insert(query.to_string(), (Instant::now(), data.clone()));
+        Ok(data)
     }
 
     /// Runs a query such as `laps?session_key=9161`. The answer is a JSON array of rows

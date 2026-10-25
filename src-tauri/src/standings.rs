@@ -129,6 +129,18 @@ pub struct LastRace {
 pub struct DriverTable {
     pub round: String,
     pub rows: Vec<DriverRow>,
+    /// The whole field, for the title fight (not sent to the page).
+    #[serde(skip)]
+    pub all: Vec<TitleDriver>,
+}
+
+/// One driver of the full championship table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TitleDriver {
+    pub code: String,
+    pub points: f64,
+    pub team: Option<String>,
+    pub team_id: Option<String>,
 }
 
 /// Everything the Standings page shows. Each part may be missing (early in a season, or
@@ -149,6 +161,16 @@ pub fn parse_drivers(json: &str) -> Result<Option<DriverTable>, serde_json::Erro
     let Some(list) = response.mr_data.table.lists.into_iter().next() else {
         return Ok(None);
     };
+    let all = list
+        .standings
+        .iter()
+        .map(|entry| TitleDriver {
+            code: entry.driver.short_code(),
+            points: entry.points.parse().unwrap_or(0.0),
+            team: entry.constructors.last().map(|c| c.name.clone()),
+            team_id: entry.constructors.last().map(|c| c.id.clone()),
+        })
+        .collect();
     let rows = list
         .standings
         .into_iter()
@@ -164,6 +186,7 @@ pub fn parse_drivers(json: &str) -> Result<Option<DriverTable>, serde_json::Erro
     Ok(Some(DriverTable {
         round: list.round,
         rows,
+        all,
     }))
 }
 
