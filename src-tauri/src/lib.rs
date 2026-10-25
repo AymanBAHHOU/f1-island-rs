@@ -14,6 +14,8 @@ pub mod live_tab;
 pub mod live_window;
 pub mod merge;
 pub mod news;
+pub mod openf1;
+pub mod results;
 pub mod schedule;
 pub mod standings;
 pub mod status_log;

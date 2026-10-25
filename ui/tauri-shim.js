@@ -58,7 +58,7 @@
     snapshot,
     news: () => invoke('news'),
     trackMap: unsupported('Track map'),
-    weekendResults: unsupported('Weekend results'),
+    weekendResults: () => invoke('weekend_results'),
     openArticle: (url) => invoke('open_article', { url }),
     settings: () =>
       Promise.resolve({
