@@ -7,6 +7,7 @@
 
 mod live;
 
+use f1_island::analysis_data::Analyses;
 use f1_island::circuit::CircuitHistory;
 use f1_island::jolpica::Jolpica;
 use f1_island::news::{self, News};
@@ -93,6 +94,104 @@ async fn snapshot(
         .await)
 }
 
+fn now() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
+// ---------- the Analysis page ----------
+
+// The season's finished sessions, newest first.
+#[tauri::command]
+async fn analysis_sessions(
+    openf1: tauri::State<'_, OpenF1>,
+    results: tauri::State<'_, Results>,
+) -> Result<Vec<f1_island::results::SessionRef>, String> {
+    results.sessions(&openf1, now()).await
+}
+
+#[tauri::command]
+async fn analysis_get(
+    key: i64,
+    openf1: tauri::State<'_, OpenF1>,
+    analyses: tauri::State<'_, Analyses>,
+) -> Result<serde_json::Value, String> {
+    Ok(analyses.get(&openf1, key, now()).await?.data.clone())
+}
+
+#[tauri::command]
+async fn analysis_telemetry(
+    session_key: i64,
+    driver: i64,
+    lap: i64,
+    openf1: tauri::State<'_, OpenF1>,
+    analyses: tauri::State<'_, Analyses>,
+) -> Result<serde_json::Value, String> {
+    analyses
+        .telemetry(&openf1, session_key, driver, lap, now())
+        .await
+}
+
+#[tauri::command]
+async fn analysis_location(
+    session_key: i64,
+    driver: i64,
+    lap: i64,
+    openf1: tauri::State<'_, OpenF1>,
+    analyses: tauri::State<'_, Analyses>,
+) -> Result<serde_json::Value, String> {
+    analyses
+        .lap_location(&openf1, session_key, driver, lap, now())
+        .await
+}
+
+#[tauri::command]
+async fn replay_info(
+    session_key: i64,
+    openf1: tauri::State<'_, OpenF1>,
+    analyses: tauri::State<'_, Analyses>,
+) -> Result<serde_json::Value, String> {
+    analyses.replay_info(&openf1, session_key, now()).await
+}
+
+#[tauri::command]
+async fn replay_chunk(
+    session_key: i64,
+    index: i64,
+    openf1: tauri::State<'_, OpenF1>,
+    analyses: tauri::State<'_, Analyses>,
+) -> Result<serde_json::Value, String> {
+    analyses
+        .replay_chunk(&openf1, session_key, index, now())
+        .await
+}
+
+// The map for the weekend shown on the Circuit page.
+#[tauri::command]
+async fn track_map(
+    jolpica: tauri::State<'_, Jolpica>,
+    openf1: tauri::State<'_, OpenF1>,
+    results: tauri::State<'_, Results>,
+    analyses: tauri::State<'_, Analyses>,
+) -> Result<Option<serde_json::Value>, String> {
+    let now_ms = now();
+    let weekend = jolpica.weekend(now_ms).await.map_err(|e| e.to_string())?;
+    let Some(w) = weekend else { return Ok(None) };
+    let (Some(first), Some(last)) = (w.sessions.first(), w.sessions.last()) else {
+        return Ok(None);
+    };
+    analyses
+        .weekend_track_map(
+            &openf1,
+            &results,
+            first.start_ms,
+            last.end_ms,
+            &w.country,
+            &w.locality,
+            now_ms,
+        )
+        .await
+}
+
 // The top three of each finished session of this weekend.
 #[tauri::command]
 async fn weekend_results(
@@ -165,6 +264,7 @@ fn main() {
         .manage(OpenF1::default())
         .manage(Results::default())
         .manage(Snapshots::default())
+        .manage(Analyses::default())
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -178,7 +278,14 @@ fn main() {
             news,
             open_article,
             weekend_results,
-            snapshot
+            snapshot,
+            analysis_sessions,
+            analysis_get,
+            analysis_telemetry,
+            analysis_location,
+            replay_info,
+            replay_chunk,
+            track_map
         ])
         .setup(|app| {
             let win = app

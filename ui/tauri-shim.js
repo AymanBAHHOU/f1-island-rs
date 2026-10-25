@@ -17,7 +17,7 @@
   window.f1 = {
     snapshot,
     news: () => invoke('news'),
-    trackMap: unsupported('Track map'),
+    trackMap: () => invoke('track_map'),
     weekendResults: () => invoke('weekend_results'),
     openArticle: (url) => invoke('open_article', { url }),
     settings: () =>
@@ -58,14 +58,16 @@
     onUpdate: noop,
     updateAct: noop,
     analysis: {
-      sessions: unsupported('Analysis'),
-      get: unsupported('Analysis'),
+      sessions: () => invoke('analysis_sessions'),
+      get: (key) => invoke('analysis_get', { key }),
       pick: unsupported('Analysis'),
-      telemetry: unsupported('Telemetry'),
+      telemetry: (sessionKey, driver, lap) =>
+        invoke('analysis_telemetry', { sessionKey, driver, lap }),
       choose: unsupported('Menu'),
-      location: unsupported('Location'),
-      replayInfo: unsupported('Replay'),
-      replayChunk: unsupported('Replay'),
+      location: (sessionKey, driver, lap) =>
+        invoke('analysis_location', { sessionKey, driver, lap }),
+      replayInfo: (sessionKey) => invoke('replay_info', { sessionKey }),
+      replayChunk: (sessionKey, index) => invoke('replay_chunk', { sessionKey, index }),
     },
   };
 })();
