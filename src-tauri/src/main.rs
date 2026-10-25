@@ -84,7 +84,8 @@ fn main() {
             if let Some(monitor) = win.current_monitor()? {
                 let scale = monitor.scale_factor();
                 let size = win.outer_size()?;
-                let x = monitor.position().x + (monitor.size().width as i32 - size.width as i32) / 2;
+                let x =
+                    monitor.position().x + (monitor.size().width as i32 - size.width as i32) / 2;
                 let y = monitor.position().y + ((TOP_GAP - EDGE) * scale) as i32;
                 win.set_position(PhysicalPosition::new(x, y))?;
             }
@@ -105,7 +106,8 @@ fn main() {
                     let Some(win) = handle.get_webview_window("main") else {
                         continue;
                     };
-                    let (Ok(cursor), Ok(pos)) = (win.cursor_position(), win.outer_position()) else {
+                    let (Ok(cursor), Ok(pos)) = (win.cursor_position(), win.outer_position())
+                    else {
                         continue;
                     };
                     let scale = win.scale_factor().unwrap_or(1.0);

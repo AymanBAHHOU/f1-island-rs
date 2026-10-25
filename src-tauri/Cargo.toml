@@ -5,6 +5,11 @@ description = "F1 Island, rewritten in Rust with Tauri"
 edition = "2021"
 license = "MIT"
 
+[lib]
+# The logic that needs no window lives in the library, so it can be tested on its own
+# (`cargo test --lib`) without compiling Tauri.
+name = "f1_island"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -12,3 +17,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+tempfile = "3"
