@@ -18,6 +18,7 @@ use f1_island::schedule::Weekend;
 use f1_island::settings::{Settings, SettingsStore};
 use f1_island::snapshot::Snapshots;
 use f1_island::standings::Standings;
+use f1_island::updater::{self, Updater};
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -123,6 +124,49 @@ fn set_demo(app: &tauri::AppHandle, mode: Option<&str>) {
     let demo = mode.and_then(|m| demo::create(m, chrono::Utc::now().timestamp_millis()));
     *app.state::<DemoState>().0.lock().unwrap() = demo.clone();
     let _ = app.emit("island:demo", demo);
+}
+
+// ---------- updates ----------
+
+#[tauri::command]
+fn update_state(updater: tauri::State<Updater>) -> updater::State {
+    updater.state()
+}
+
+// The user chose the update chip: open the download page, or check now.
+#[tauri::command]
+fn update_act(app: tauri::AppHandle) {
+    act_on_update(&app);
+}
+
+fn act_on_update(app: &tauri::AppHandle) {
+    let updater = app.state::<Updater>();
+    match updater::act(&updater.state()) {
+        updater::Act::Open(url) => {
+            let _ = open::that(url);
+        }
+        updater::Act::Check => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move { check_for_update(&app).await });
+        }
+        updater::Act::Nothing => {}
+    }
+}
+
+async fn check_for_update(app: &tauri::AppHandle) {
+    let updater = app.state::<Updater>();
+    if let Some(state) = updater.check(chrono::Utc::now().timestamp_millis()).await {
+        let _ = app.emit("update:state", state);
+    }
+}
+
+// Checks half a minute after start, then every six hours.
+async fn watch_for_updates(app: tauri::AppHandle) {
+    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+    loop {
+        check_for_update(&app).await;
+        tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
+    }
 }
 
 fn now() -> i64 {
@@ -297,6 +341,7 @@ fn main() {
         .manage(Snapshots::default())
         .manage(Analyses::default())
         .manage(DemoState::default())
+        .manage(Updater::new(env!("CARGO_PKG_VERSION")))
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -320,7 +365,9 @@ fn main() {
             track_map,
             preview_alerts,
             get_settings,
-            get_demo
+            get_demo,
+            update_state,
+            update_act
         ])
         .setup(|app| {
             let win = app
@@ -340,6 +387,20 @@ fn main() {
                 std::env::args().find_map(|a| a.strip_prefix("--demo=").map(str::to_string))
             {
                 set_demo(handle, Some(&mode));
+            }
+
+            // `--fake-update=9.9.9` shows the update chip, for trying it out.
+            if let Some(version) =
+                std::env::args().find_map(|a| a.strip_prefix("--fake-update=").map(str::to_string))
+            {
+                handle.state::<Updater>().set(updater::State {
+                    status: updater::Status::Available,
+                    version: Some(version),
+                    url: Some(updater::RELEASES_URL.to_string()),
+                    checked_at: now(),
+                });
+            } else if !cfg!(debug_assertions) {
+                tauri::async_runtime::spawn(watch_for_updates(handle.clone()));
             }
 
             if std::env::args().any(|a| a == "--demo-alerts") {

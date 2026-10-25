@@ -28,4 +28,5 @@ pub mod snapshot;
 pub mod standings;
 pub mod status_log;
 pub mod title;
+pub mod updater;
 pub mod version;

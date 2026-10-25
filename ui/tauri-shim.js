@@ -47,9 +47,9 @@
     reportPinned: noop,
     onSetPinned: noop,
     onSettings: (cb) => on('island:settings', cb),
-    updateState: () => Promise.resolve({ status: 'idle', version: null, url: null, checkedAt: 0 }),
-    onUpdate: noop,
-    updateAct: noop,
+    updateState: () => invoke('update_state'),
+    onUpdate: (cb) => on('update:state', cb),
+    updateAct: () => invoke('update_act'),
     analysis: {
       sessions: () => invoke('analysis_sessions'),
       get: (key) => invoke('analysis_get', { key }),

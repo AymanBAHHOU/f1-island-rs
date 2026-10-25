@@ -18,4 +18,5 @@ which provides `window.f1` on top of Tauri commands and events. A feature is don
 - [x] Alerts (flags, SC/VSC, penalties, rate limits; preview)
 - [x] Demo mode (identical data to Electron) · settings file (same format)
 - [ ] Shell: drag, dock + slide, pin, auto-hide, summon hotkey, big-mode geometry, menu, tray, single instance, login item, position memory, mac notch
-- [ ] Release: updater + signing, installers, release workflow, README
+- [x] Update chip (notify mode: checks GitHub releases, opens the page)
+- [ ] Release: self-installing updater + signing, installers, release workflow, README
