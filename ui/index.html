@@ -2,40 +2,63 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>F1 Island</title>
-    <link rel="stylesheet" href="style.css" />
-    <link rel="stylesheet" href="live.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="analysis.css" />
+    <link rel="stylesheet" href="notch.css" />
   </head>
   <body>
-    <!-- #zone sizes itself to the island; Rust is told its rectangle (see main.js). -->
     <div id="zone">
+      <svg class="notch-surface" aria-hidden="true"><path /></svg>
+      <i class="shoulder l" aria-hidden="true"></i>
       <div id="island">
+        <div class="notch-wings" id="notchIdle" role="status" aria-live="off">
+          <div class="idle-left">
+            <span class="idle-emblem" aria-hidden="true"><b>F1</b><span class="idle-dot" id="idleDot"></span></span>
+            <span class="idle-copy"><span class="idle-eyebrow" id="idleKicker">NEXT UP</span><strong id="idleTitle">Formula 1</strong></span>
+          </div>
+          <div class="notch-camera-gap" aria-hidden="true"></div>
+          <div class="idle-right"><span class="idle-eyebrow" id="idleStatus">SCHEDULE</span><strong id="idleValue">Loading…</strong></div>
+          <div class="idle-ticker"><span class="idle-chip" id="idleChip">NEXT</span><span class="idle-detail" id="idleDetail">Fetching the weekend schedule</span><span class="idle-chevron" aria-hidden="true">⌄</span></div>
+        </div>
         <div class="compact">
-          <span class="dot"></span>
+          <span class="dot" id="cDot"></span>
           <span class="c-label" id="cLabel">F1</span>
           <span class="c-right" id="cRight">Loading…</span>
         </div>
-        <div class="expanded" id="expanded">
-          <div class="eyebrow" id="eyebrow">Formula 1</div>
-          <h1 id="title">Loading…</h1>
-          <div class="sub" id="subtitle"></div>
-          <nav class="pages" id="pages"></nav>
-
-          <section id="page-weekend">
-            <div class="hero">
-              <div><small id="nextLabel">Next up</small><strong id="next"></strong></div>
-              <div class="count" id="count">--:--:--</div>
+        <div class="alert-view" id="alertView"></div>
+        <div class="expanded-view" id="expanded"></div>
+        <div class="big-view" id="big">
+          <div class="big-head">
+            <button class="back-btn" id="bigBack" title="Back">‹</button>
+            <div class="big-title">
+              <div class="eyebrow">Session analysis</div>
+              <h1 id="bigTitle">Loading…</h1>
+              <div class="sub" id="bigSub"></div>
             </div>
-            <ul class="sessions" id="sessions"></ul>
-          </section>
-
-          <section id="page-live" hidden></section>
-          <section id="page-standings" hidden></section>
-          <section id="page-circuit" hidden></section>
+            <span class="big-flag" id="bigFlag" hidden></span>
+            <button class="session-btn" id="bigSession">Change session <span>▾</span></button>
+          </div>
+          <nav class="tabs" id="bigTabs">
+            <button data-tab="summary" class="active">Summary</button>
+            <button data-tab="short">Short runs</button>
+            <button data-tab="long">Long runs</button>
+            <button data-tab="compare">Compare</button>
+            <button data-tab="replay">Replay</button>
+            <button data-tab="tyres">Tyres &amp; speed</button>
+          </nav>
+          <div class="big-body" id="bigBody"></div>
         </div>
       </div>
+      <i class="shoulder r" aria-hidden="true"></i>
     </div>
-    <script src="main.js"></script>
+    <script src="tauri-shim.js"></script>
+    <script src="trackmap.js"></script>
+    <script src="analysis-view.js"></script>
+    <script src="notch-motion.js"></script>
+    <script src="notch-idle.js"></script>
+    <script src="clock.js"></script>
+    <script src="livetab.js"></script>
+    <script src="renderer.js"></script>
   </body>
 </html>

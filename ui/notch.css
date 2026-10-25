@@ -1,0 +1,191 @@
+/* The camera cutout is real hardware: leave its entire native rectangle empty.
+   Compact information lives in two wings; open content starts below it. */
+.notch-wings { display: none; }
+.notch-surface { display: none; }
+
+.notched {
+  --compact-w: var(--idle-w);
+  --idle-wing: calc((var(--idle-w) - var(--notch-w)) / 2);
+  --spring: cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.notched #zone { min-width: 0; min-height: 0; }
+.notched #island {
+  z-index: 1;
+  height: calc(var(--notch-h) + 24px);
+  background: transparent;
+  border-radius: 0 0 16px 16px;
+  box-shadow: none !important;
+  /* Geometry is interpolated together by NotchMotion, not independent CSS
+     transitions that can pull the corners away from the moving edges. */
+  transition: opacity 0.18s ease;
+}
+
+/* One anti-aliased vector surface replaces separate hard gradient shoulders.
+   Its tangent-continuous curves share the body's exact interpolated bounds. */
+.notched .notch-surface {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: -32px;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.4));
+}
+.notch-surface path {
+  fill: #000;
+  stroke: none;
+}
+.notched #zone:has(#island.expanded) .notch-surface {
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.5));
+}
+.notched #zone:has(#island.hidden) .notch-surface { filter: none; }
+/* The hardware cutout cannot display a stroke. Keep every notch state pure
+   black, including its top edge, so the camera does not interrupt an outline.
+   Status colour belongs in the emblem/chip/banner, never around the notch. */
+.notched #zone:has(#island.stretched) .notch-surface {
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.4));
+}
+
+.notched .compact { display: none; }
+.notched #zone { --idle-accent: #e10600; }
+.notched #zone[data-idle-tone='green'] { --idle-accent: #30d158; }
+.notched #zone:is([data-idle-tone='sc'], [data-idle-tone='vsc']) { --idle-accent: #ffb340; }
+.notched #zone[data-idle-tone='yellow'] { --idle-accent: #ffd60a; }
+.notched #zone[data-idle-tone='info'] { --idle-accent: #64a8ff; }
+.notched #zone[data-idle-tone='neutral'] { --idle-accent: #a1a1aa; }
+.notched .notch-wings {
+  position: absolute;
+  inset: 0 auto auto 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: var(--idle-wing) var(--notch-w) var(--idle-wing);
+  width: var(--compact-w);
+  height: calc(var(--notch-h) + 24px);
+  grid-template-rows: var(--notch-h) 24px;
+  align-items: center;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  pointer-events: none;
+  background: transparent;
+}
+.notched #island.stretched .notch-wings { opacity: 1; transition-delay: 0.07s; }
+.notched #island.stretched,
+.notched .expanded-view > :is(.eyebrow, h1, .sub) { cursor: grab; }
+.idle-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px 0 13px;
+  min-width: 0;
+}
+.idle-emblem {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 25px;
+  height: 24px;
+  border-radius: 7px;
+  color: var(--idle-accent);
+  background: color-mix(in srgb, var(--idle-accent) 12%, #080808);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--idle-accent) 28%, transparent);
+}
+.idle-emblem b { font-size: 13px; font-style: italic; font-weight: 850; letter-spacing: -1px; }
+.idle-dot {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 4px;
+  height: 4px;
+  border: 2px solid #000;
+  border-radius: 50%;
+  background: var(--idle-accent);
+}
+.idle-dot.live { animation: idle-live 2s ease-in-out infinite; }
+@keyframes idle-live { 50% { opacity: 0.35; } }
+.idle-copy { display: grid; gap: 3px; min-width: 0; }
+.idle-eyebrow {
+  color: #87878e;
+  font-size: 7px;
+  font-weight: 650;
+  letter-spacing: 0.6px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.idle-copy strong { font-size: 10px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idle-right {
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  min-width: 0;
+  padding: 0 13px 0 8px;
+}
+.idle-right strong {
+  max-width: 100%;
+  color: #f5f5f7;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.1px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.idle-ticker {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 23px;
+  margin: 0 12px;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+.idle-chip {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--idle-accent);
+  background: color-mix(in srgb, var(--idle-accent) 12%, transparent);
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0.5px;
+}
+.idle-detail { flex: 1; min-width: 0; color: #b0b0b8; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idle-chevron { flex: none; color: #60606a; font-size: 13px; transform: translateY(-2px); }
+.notched #island:is(.expanded, .big, .alert, .hidden) .notch-wings { opacity: 0; }
+.notched #island:is(.expanded, .big) { border-radius: 0 0 28px 28px; }
+.notched .expanded-view {
+  padding-top: calc(var(--notch-h) + 16px);
+  transform-origin: 50% var(--notch-h);
+  transform: translateY(-7px) scale(0.97);
+  transition: opacity 0.16s ease, transform 0.3s var(--spring);
+}
+.notched #island.expanded .expanded-view {
+  transform: translateY(0) scale(1);
+  transition-delay: 0.06s;
+}
+.notched .big-view { padding-top: var(--notch-h); box-sizing: border-box; }
+.notched .big-head { cursor: grab; }
+.notched #island.alert { height: calc(var(--notch-h) + 76px); border-radius: 0 0 24px 24px; animation: none; }
+.notched .alert-view { top: calc(var(--notch-h) + 5px); }
+.notched #island.hidden {
+  width: calc(var(--notch-w) - 4px);
+  height: calc(var(--notch-h) - 1px);
+  opacity: 1;
+  border-radius: 0 0 10px 10px;
+}
+.notched #zone.autohide { min-width: 0; min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  #zone, #island, .expanded-view, .compact, .notch-wings, .alert-view, .big-view {
+    transition: none !important;
+  }
+  .dot.live, .idle-dot.live, #island.alert { animation: none !important; }
+}
