@@ -4,19 +4,26 @@ The page (`ui/`) is the Electron app's renderer, unchanged except for `tauri-shi
 which provides `window.f1` on top of Tauri commands and events. A feature is done when its
 `window.f1` call works against real Rust code.
 
+Where it could be compared, the Rust output was checked **identical** to the Electron app's
+on real data (snapshot, title-fight chances, session analysis, telemetry, replay, demo data).
+
 ## Done
-- [x] Weekend, Standings, Circuit pages (Jolpica)
-- [x] News (RSS, open in browser)
-- [x] Title fight (same chances as Electron, checked) · fresher standings (OpenF1) · snapshot assembled in Rust
-- [x] OpenF1 client (queue, disk cache) · weekend results
-- [x] Live timing connection, Live tab, qualifying gaps, status log
-- [x] Hover / click-through
+- [x] Weekend, Standings, Title, Circuit, News pages; weekend results (top three per session)
+- [x] Live timing connection, Live tab, qualifying gaps, status log, Live-tab rule
+- [x] Alerts (flags, SC/VSC, penalties, rate limits) and "Preview alerts"
+- [x] Session analysis: Summary, Short runs, Long runs, Compare, Replay, Tyres & speed
+- [x] Track map, telemetry, lap location, deleted laps
+- [x] OpenF1 client (queue, disk cache, rate-limit retry); fresher standings with "After <GP>" note
+- [x] Settings file (same format as Electron's); preview (demo) mode; update chip
+- [x] Window: always-on-top, transparent, click-through with hover polling
+- [x] Drag, docking (drop near the top edge, slides to centre), position memory, reset position
+- [x] Big window for the analysis view (and dragging it)
+- [x] Tray icon + menu, island menu (⋯ / right click), pop-up lists, session picker
+- [x] Global hotkey, single instance, start with Windows, multi-monitor / wake-from-sleep re-placement
+- [x] Debug flags: `--pinned --big --tab= --page= --start= --demo= --demo-alerts --fake-update= --docked`
 
 ## To do
-- [x] Track map
-- [x] Analysis backend (identical output to Electron on real sessions): sessions, runs, compare data, tyres & speed, replay, telemetry, location
-- [x] Alerts (flags, SC/VSC, penalties, rate limits; preview)
-- [x] Demo mode (identical data to Electron) · settings file (same format)
-- [ ] Shell: drag, dock + slide, pin, auto-hide, summon hotkey, big-mode geometry, menu, tray, single instance, login item, position memory, mac notch
-- [x] Update chip (notify mode: checks GitHub releases, opens the page)
-- [ ] Release: self-installing updater + signing, installers, release workflow, README
+- [ ] macOS: camera-notch attachment (geometry is ported and tested in `notch.rs`; needs the
+      helper, window level and a real Mac to verify), "Idle appearance" menu
+- [ ] Release: self-installing updater + signing, installers (Windows/macOS), release workflow, README
+- [ ] Not ported on purpose: `--screenshot=` (developer tool for the README)

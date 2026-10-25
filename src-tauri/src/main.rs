@@ -6,6 +6,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod live;
+mod menus;
+mod shell;
 
 use f1_island::analysis_data::Analyses;
 use f1_island::circuit::CircuitHistory;
@@ -19,17 +21,8 @@ use f1_island::settings::{Settings, SettingsStore};
 use f1_island::snapshot::Snapshots;
 use f1_island::standings::Standings;
 use f1_island::updater::{self, Updater};
-use serde::Deserialize;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
-use tauri::{Emitter, Manager, PhysicalPosition};
-
-// The window is bigger than the island and transparent. The island sits EDGE
-// pixels below the window's top, and the window is moved up by EDGE so the
-// island ends up TOP_GAP from the top of the screen (these match the Electron app).
-const EDGE: f64 = 32.0;
-const TOP_GAP: f64 = 8.0;
+use tauri::{Emitter, Manager};
 
 // ---------- data for the page ----------
 
@@ -287,54 +280,20 @@ async fn weekend_results(
         .await
 }
 
-// ---------- where the island is, so we know when the mouse is over it ----------
-
-// The page tells us the island's rectangle (in CSS pixels, relative to the window).
-#[derive(Clone, Copy, Deserialize)]
-struct Rect {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-}
-
-// Shared state. The polling thread reads it while commands write it, so it sits
-// behind a `Mutex`: only one side can hold the lock at a time. `Option` because
-// the page hasn't reported a rectangle yet when we start.
-#[derive(Default)]
-struct HitRect(Mutex<Option<Rect>>);
-
-#[tauri::command]
-fn report_rect(rect: Rect, state: tauri::State<HitRect>) {
-    *state.0.lock().unwrap() = Some(rect);
-}
-
-// Whether the pointer was over the island at the last check. Shared so the page can ask for
-// the next check to report again (see `rehover`).
-#[derive(Default)]
-struct Hovering(AtomicBool);
-
-// The window is click-through until the page says otherwise: the page asks for clicks
-// when the island is open, and gives them back when it closes. (Same split as the Electron
-// app: the main process reports where the mouse is, the page decides what that means.)
-#[tauri::command]
-fn set_interactive(on: bool, window: tauri::WebviewWindow) {
-    let _ = window.set_ignore_cursor_events(!on);
-}
-
-// "Tell me again whether the pointer is on the island": clears the remembered answer, so
-// the next check reports even if nothing changed.
-#[tauri::command]
-fn rehover(hovering: tauri::State<Hovering>) {
-    hovering.0.store(false, Ordering::Relaxed);
-}
-
-// ---------- the window ----------
-
 fn main() {
     tauri::Builder::default()
-        .manage(HitRect::default())
-        .manage(Hovering::default())
+        // Must come first: a second launch asks the running island to show itself.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = app.emit("island:toggle", ());
+        }))
+        .plugin(menus::hotkey_plugin())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .manage(shell::Shell::default())
+        .manage(menus::Hotkey::default())
+        .manage(menus::Choices::default())
         .manage(News::default())
         .manage(OpenF1::default())
         .manage(Results::default())
@@ -344,14 +303,23 @@ fn main() {
         .manage(Updater::new(env!("CARGO_PKG_VERSION")))
         .manage(Jolpica::new())
         .manage(live::Live::default())
+        .on_menu_event(menus::on_menu_event)
         .invoke_handler(tauri::generate_handler![
             weekend,
             standings,
             circuit_history,
             live::live_state,
-            report_rect,
-            set_interactive,
-            rehover,
+            shell::report_rect,
+            shell::set_interactive,
+            shell::rehover,
+            shell::report_pinned,
+            shell::drag_start,
+            shell::drag_end,
+            shell::set_big,
+            shell::get_notch,
+            menus::open_menu,
+            menus::choose,
+            menus::analysis_pick,
             news,
             open_article,
             weekend_results,
@@ -370,9 +338,7 @@ fn main() {
             update_act
         ])
         .setup(|app| {
-            let win = app
-                .get_webview_window("main")
-                .expect("the window from tauri.conf.json");
+            let handle = app.handle().clone();
 
             let settings_file = app
                 .path()
@@ -381,18 +347,23 @@ fn main() {
                 .unwrap_or_else(|_| "settings.json".into());
             app.manage(SettingsStore::load(settings_file));
 
+            // OpenF1 answers are kept on disk, so sessions already opened keep working
+            // while a live session blocks the free API.
+            if let Ok(dir) = app.path().app_data_dir() {
+                app.state::<OpenF1>().set_cache_dir(&dir.join("openf1"));
+            }
+
+            let arg = |name: &str| {
+                std::env::args().find_map(|a| a.strip_prefix(name).map(str::to_string))
+            };
+
             // `--demo=race` (or next, safety-car, red-flag, penalty) starts in a preview.
-            let handle = app.handle();
-            if let Some(mode) =
-                std::env::args().find_map(|a| a.strip_prefix("--demo=").map(str::to_string))
-            {
-                set_demo(handle, Some(&mode));
+            if let Some(mode) = arg("--demo=") {
+                set_demo(&handle, Some(&mode));
             }
 
             // `--fake-update=9.9.9` shows the update chip, for trying it out.
-            if let Some(version) =
-                std::env::args().find_map(|a| a.strip_prefix("--fake-update=").map(str::to_string))
-            {
+            if let Some(version) = arg("--fake-update=") {
                 handle.state::<Updater>().set(updater::State {
                     status: updater::Status::Available,
                     version: Some(version),
@@ -403,68 +374,29 @@ fn main() {
                 tauri::async_runtime::spawn(watch_for_updates(handle.clone()));
             }
 
+            // `--docked` (debugging): dock for this run only, without saving it.
+            if std::env::args().any(|a| a == "--docked") {
+                handle
+                    .state::<SettingsStore>()
+                    .update_in_memory(|s| s.docked = true);
+            }
+
+            shell::create_window(&handle)?;
+            menus::register_hotkey(&handle);
+            menus::create_tray(&handle)?;
+            shell::start_hover_polling(handle.clone());
+            shell::start_display_watch(handle.clone());
+
             if std::env::args().any(|a| a == "--demo-alerts") {
-                let handle = app.handle().clone();
+                let handle = handle.clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
                     live::preview_alerts(&handle);
                 });
             }
-            // OpenF1 answers are kept on disk, so sessions already opened keep working
-            // while a live session blocks the free API.
-            if let Ok(dir) = app.path().app_data_dir() {
-                app.state::<OpenF1>().set_cache_dir(&dir.join("openf1"));
-            }
-
-            // Centre the window horizontally at the top of the monitor it's on.
-            if let Some(monitor) = win.current_monitor()? {
-                let scale = monitor.scale_factor();
-                let size = win.outer_size()?;
-                let x =
-                    monitor.position().x + (monitor.size().width as i32 - size.width as i32) / 2;
-                let y = monitor.position().y + ((TOP_GAP - EDGE) * scale) as i32;
-                win.set_position(PhysicalPosition::new(x, y))?;
-            }
-
-            // Start click-through: clicks pass to the apps underneath.
-            win.set_ignore_cursor_events(true)?;
-
-            // A window that is click-through can't see the mouse, so a background
-            // thread asks the OS where the cursor is, 20 times a second. When it
-            // enters or leaves the island it makes the window clickable (or not)
-            // and tells the page, which opens or closes the island.
-            let handle = app.handle().clone();
-            std::thread::spawn(move || {
-                loop {
-                    std::thread::sleep(Duration::from_millis(50));
-
-                    let Some(win) = handle.get_webview_window("main") else {
-                        continue;
-                    };
-                    let (Ok(cursor), Ok(pos)) = (win.cursor_position(), win.outer_position())
-                    else {
-                        continue;
-                    };
-                    let scale = win.scale_factor().unwrap_or(1.0);
-                    let rect = *handle.state::<HitRect>().0.lock().unwrap();
-
-                    // Cursor position relative to the window, in CSS pixels.
-                    let x = (cursor.x - pos.x as f64) / scale;
-                    let y = (cursor.y - pos.y as f64) / scale;
-                    let inside = rect.is_some_and(|r| {
-                        x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
-                    });
-
-                    let hovering = handle.state::<Hovering>();
-                    if inside != hovering.0.load(Ordering::Relaxed) {
-                        hovering.0.store(inside, Ordering::Relaxed);
-                        let _ = win.emit("hover", inside);
-                    }
-                }
-            });
 
             // Live timing: a task that decides when to be connected (see live.rs).
-            tauri::async_runtime::spawn(live::supervise(app.handle().clone()));
+            tauri::async_runtime::spawn(live::supervise(handle));
 
             Ok(())
         })
