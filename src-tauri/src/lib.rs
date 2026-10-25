@@ -3,6 +3,7 @@
 //!
 //! Run the tests with `cargo test --lib` from `src-tauri/`.
 
+pub mod alerts;
 pub mod analysis;
 pub mod analysis_data;
 pub mod championship;

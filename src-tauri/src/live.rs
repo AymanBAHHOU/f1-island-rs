@@ -7,6 +7,7 @@
 //! - `f1_island::live_client::run` is the connection itself (a library module);
 //! - `consume` receives its events and acts on them.
 
+use f1_island::alerts::{self, Alert, Limiter};
 use f1_island::jolpica::Jolpica;
 use f1_island::live_client::{self, LiveEvent};
 use f1_island::live_state::{Event, Summary};
@@ -34,6 +35,8 @@ pub struct Live {
     tab: Mutex<LiveTab>,
     /// This weekend's schedule, to know when each session was due to end.
     weekend: Mutex<Option<Weekend>>,
+    /// Spaces out bursts of the same kind of alert.
+    limiter: Mutex<Limiter>,
 }
 
 /// What the page receives: the summary, and whether Live should be the main tab.
@@ -57,6 +60,14 @@ impl Live {
             .is_some_and(|s| !s.order.is_empty() || !s.messages.is_empty());
         let main = self.tab.lock().unwrap().is_main(connected, now_ms());
         LivePayload { summary, main }
+    }
+
+    fn status(&self) -> Option<String> {
+        self.latest
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|s| s.status.clone())
     }
 
     fn is_running(&self) -> bool {
@@ -166,10 +177,55 @@ async fn consume(app: AppHandle, mut events: mpsc::UnboundedReceiver<LiveEvent>)
                 let _ = app.emit("live:state", live.payload());
             }
             LiveEvent::Feed(Event::Snapshot(status)) => to_log = Some(("snapshot", status)),
-            LiveEvent::Feed(Event::Status(status)) => to_log = Some(("status", Some(status))),
-            // Flags and race control messages will become alerts in a later stage.
-            LiveEvent::Feed(_) => {}
+            LiveEvent::Feed(Event::Status(status)) => {
+                let session = app
+                    .state::<Live>()
+                    .latest
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .and_then(|s| s.session.clone());
+                send_alert(
+                    &app,
+                    alerts::from_session_status(&status, session.as_deref()),
+                );
+                to_log = Some(("status", Some(status)));
+            }
+            LiveEvent::Feed(Event::Track { status, prev, .. }) => {
+                send_alert(&app, alerts::from_track(status.as_deref(), prev.as_deref()));
+            }
+            LiveEvent::Feed(Event::RaceControl(message)) => {
+                let live = app.state::<Live>();
+                let running = live.status().is_some_and(|s| s == "Started");
+                let alert = live
+                    .limiter
+                    .lock()
+                    .unwrap()
+                    .message(&message, running, now_ms());
+                send_alert(&app, alert);
+            }
+            LiveEvent::Feed(Event::ServerClosed) => {}
         }
+    }
+}
+
+/// Shows an alert on the island, with the lap number when the race is under way.
+pub fn send_alert(app: &AppHandle, alert: Option<Alert>) {
+    let Some(alert) = alert else { return };
+    let lap = app
+        .state::<Live>()
+        .latest
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|s| s.lap);
+    let _ = app.emit("live:alert", alerts::with_lap(alert, lap));
+}
+
+/// "Preview alerts": one of each kind, to see how they look.
+pub fn preview_alerts(app: &AppHandle) {
+    for alert in alerts::demo() {
+        send_alert(app, Some(alert));
     }
 }
 

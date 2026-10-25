@@ -45,7 +45,7 @@
       on('live:state', cb, (e) => e.payload.summary);
       invoke('live_state').then((p) => cb(p.summary));
     },
-    onAlert: noop,
+    onAlert: (cb) => on('live:alert', cb),
     onToggle: noop,
     onSummon: noop,
     onBig: noop,

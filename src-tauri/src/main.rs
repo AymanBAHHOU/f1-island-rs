@@ -94,6 +94,12 @@ async fn snapshot(
         .await)
 }
 
+// Shows one alert of each kind (also reachable from the menu, and with `--demo-alerts`).
+#[tauri::command]
+fn preview_alerts(app: tauri::AppHandle) {
+    live::preview_alerts(&app);
+}
+
 fn now() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
@@ -285,12 +291,21 @@ fn main() {
             analysis_location,
             replay_info,
             replay_chunk,
-            track_map
+            track_map,
+            preview_alerts
         ])
         .setup(|app| {
             let win = app
                 .get_webview_window("main")
                 .expect("the window from tauri.conf.json");
+
+            if std::env::args().any(|a| a == "--demo-alerts") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+                    live::preview_alerts(&handle);
+                });
+            }
             // OpenF1 answers are kept on disk, so sessions already opened keep working
             // while a live session blocks the free API.
             if let Ok(dir) = app.path().app_data_dir() {
