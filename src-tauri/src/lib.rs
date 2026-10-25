@@ -33,3 +33,11 @@ pub mod status_log;
 pub mod title;
 pub mod updater;
 pub mod version;
+
+/// Chooses the TLS (secure connection) engine for the whole program. Two engines are
+/// compiled in (the updater brings one, the HTTP client the other), and the live-timing
+/// socket cannot pick between them by itself: without this it panics when it connects.
+pub fn install_tls_provider() {
+    // Already installed (by a test, say): fine.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}

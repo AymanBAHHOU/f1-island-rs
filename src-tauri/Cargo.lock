@@ -1106,6 +1106,7 @@ dependencies = [
  "open",
  "regex",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",
