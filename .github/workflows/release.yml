@@ -1,0 +1,104 @@
+name: Release
+
+# Push a version tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`) to build the Windows
+# and macOS apps and create a *draft* GitHub release with them attached. Nothing is public
+# until the draft is published on GitHub.
+#
+# Needs the repository secret TAURI_SIGNING_PRIVATE_KEY (the updater's signing key; its public
+# half is in src-tauri/tauri.conf.json). Without it the build fails: updates must be signed.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the app's version
+        run: |
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          if [ "v$conf" != "$GITHUB_REF_NAME" ] || [ "$cargo" != "$conf" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME, tauri.conf.json $conf and Cargo.toml $cargo must all agree"
+            exit 1
+          fi
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: check
+    permissions:
+      contents: write # create the draft release and upload its files
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            args: --bundles nsis
+          - name: macOS Apple Silicon
+            os: macos-latest
+            args: --target aarch64-apple-darwin --bundles app,dmg
+          - name: macOS Intel
+            os: macos-latest
+            args: --target x86_64-apple-darwin --bundles app,dmg
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.args }}
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: F1 Island ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}
+          releaseBody: |
+            ## Downloads
+
+            | Platform | File |
+            |---|---|
+            | **Windows 10/11** (installer, updates itself) | `F1.Island_*_x64-setup.exe` |
+            | **Windows 10/11** (no install) | `F1-Island-*-win-portable.exe` |
+            | **macOS 12+, Apple Silicon** | `F1.Island_*_aarch64.dmg` |
+            | **macOS 12+, Intel** | `F1.Island_*_x64.dmg` |
+
+            The installer checks for new versions and updates itself. The portable app and the Mac app show a "new version available" note with a link to the download page.
+
+            The builds are **not code-signed or notarized** yet:
+            - **Windows:** SmartScreen shows "Windows protected your PC". Choose **More info → Run anyway**.
+            - **macOS:** if the app is blocked, use **System Settings → Privacy & Security → Open Anyway**. Don't disable Gatekeeper globally.
+
+            F1 Island is an unofficial fan project, not associated with Formula 1, the FIA or any team.
+
+      # The program on its own, for people who don't want an installer.
+      - name: Attach the portable Windows app
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp src-tauri/target/release/f1-island.exe "F1-Island-$version-win-portable.exe"
+          gh release upload "$GITHUB_REF_NAME" "F1-Island-$version-win-portable.exe" --clobber

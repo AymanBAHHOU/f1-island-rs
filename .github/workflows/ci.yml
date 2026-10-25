@@ -15,8 +15,17 @@ permissions:
 
 jobs:
   rust:
-    name: Format, lint and test (windows)
-    runs-on: windows-latest
+    name: Format, lint and test (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          # Compiles the Mac-only code too (the notch and window level).
+          - name: macos
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
       run:

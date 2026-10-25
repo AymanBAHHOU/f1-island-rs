@@ -1,26 +1,22 @@
 # F1 Island (Rust)
 
-A rewrite of [F1 Island](https://github.com/AymanBAHHOU/f1-island), the Dynamic Island for Formula 1 on your desktop, in **Rust** with [Tauri](https://tauri.app). Work in progress; the Electron app stays the reference until this one matches it.
+The Dynamic Island for Formula 1 on your desktop, written in **Rust** with [Tauri](https://tauri.app). It is the same island as the Electron app ([F1 Island](https://github.com/AymanBAHHOU/f1-island)), rebuilt to be much smaller (about 10 MB instead of about 110 MB) and lighter on memory.
 
-Why: learn Rust on a real project, and end up with a smaller (about 10 MB, not about 110 MB) and faster app.
+Weekend schedule and results, standings, title fight chances, circuit history, news, live timing with alerts, and full session analysis (short and long runs, compare, replay, tyres and speed). It floats above your windows, opens when the pointer is over it, and can be dragged anywhere or docked to the top edge. See [PORTING.md](PORTING.md) for the feature list and what has been verified.
 
 ## How it works
 
-- The **screen** is a web page (`ui/`), shown by the system's web view. It's the same island as the Electron app, so its HTML, CSS and JavaScript come across from `renderer/` over time.
-- The **logic** is Rust (`src-tauri/`): the window, the data, live timing, the maths. The page calls Rust functions by name (`invoke('island_status')`), and Rust sends events to the page (`hover`).
+- The **screen** is a web page (`ui/`), shown by the system's web view. It is the Electron app's page, unchanged; `ui/tauri-shim.js` gives it the `window.f1` interface on top of Tauri.
+- The **logic** is Rust (`src-tauri/`). The page calls Rust functions by name (`invoke('snapshot')`) and Rust sends events to the page (`hover`, `live:state`, `live:alert`).
+- Code that needs no window lives in the library (`src-tauri/src/lib.rs` and its modules) and is tested without a screen (`cargo test --lib`). The window, menus and tray are in the program itself (`main.rs`, `shell.rs`, `menus.rs`, `live.rs`, `self_update.rs`).
 
-## Stages
-
-| # | Stage | What it teaches |
-|---|---|---|
-| 1 | **Hello island**: a transparent, always-on-top, click-through window; the island opens when the mouse is over it; data comes from a Rust function | project layout, `cargo`, commands, shared state, threads |
-| 2 | **Pure logic with tests**: version compare, dock rule, status log, alert rules, session clock | structs, enums, pattern matching, `#[test]` |
-| 3 | **Fetching data**: the schedule, standings, circuit history | async Rust, `reqwest`, `serde` (JSON to Rust types), errors with `Result` |
-| 4 | **The live feed**: F1 live timing over a WebSocket | long-running async tasks, shared state, sending updates to the page |
-| 5 | **The heavy maths**: title chances (Monte Carlo), session analysis | performance, iterators |
-| 6 | **The shell**: dragging, docking, tray, hotkey, auto-update, installer | Tauri plugins, packaging |
-
-macOS notch support comes last (it needs native Mac code).
+| Area | Modules |
+|---|---|
+| Data | `jolpica`, `openf1`, `news`, `snapshot`, `standings`, `circuit`, `schedule`, `results`, `season` |
+| Title fight | `championship` (Monte Carlo, same random numbers as the Electron app), `title` |
+| Live timing | `live_client`, `live_state`, `merge`, `live_tab`, `live_window`, `clock`, `status_log`, `alerts` |
+| Analysis | `analysis` (the calculation), `analysis_data` (fetching, telemetry, track map, replay) |
+| Window | `geometry` (where the island goes), `dock`, `notch`, `platform`, `settings`, `demo`, `updater` |
 
 ## Run it
 
@@ -30,6 +26,33 @@ You need [Rust](https://rustup.rs), Node.js, and on Windows the Visual Studio C+
 npm install
 npm run dev
 ```
+
+Useful flags (after `--` with `npm run dev --`): `--pinned` (start open), `--big` (open the analysis view), `--page=`, `--tab=`, `--demo=race` (a pretend race), `--demo-alerts`, `--fake-update=9.9.9`, `--docked`.
+
+## Test it
+
+```bash
+cd src-tauri
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test --lib
+```
+
+`cargo test --lib -- --ignored` also runs the tests that use the real network.
+
+## Releases
+
+Push a version tag to build the Windows installer, the portable exe and the Mac apps, and create a **draft** GitHub release:
+
+1. Set the same version in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
+2. `git tag v0.1.0 && git push origin v0.1.0`
+3. When the draft looks right, publish it on GitHub.
+
+The installer updates itself: the app checks the release's `latest.json`, downloads the signed update in the background, and installs it when you choose **Restart to update**. The portable exe and the Mac app only announce a new version.
+
+Updates are signed. The public key is in `tauri.conf.json`; the private key is the repository secret `TAURI_SIGNING_PRIVATE_KEY` (its password, if any, is `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Keep a copy of the private key somewhere safe: without it, installed apps can never be updated to a new release. To make a new pair: `npx tauri signer generate -w f1-island.key`, then put the public key in `tauri.conf.json`.
+
+The builds are not code-signed or notarized yet (Windows SmartScreen and macOS Gatekeeper ask for confirmation on first run).
 
 ## Disclaimer
 

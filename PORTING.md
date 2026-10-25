@@ -23,7 +23,7 @@ on real data (snapshot, title-fight chances, session analysis, telemetry, replay
 - [x] Debug flags: `--pinned --big --tab= --page= --start= --demo= --demo-alerts --fake-update= --docked`
 
 ## To do
-- [ ] macOS: camera-notch attachment (geometry is ported and tested in `notch.rs`; needs the
-      helper, window level and a real Mac to verify), "Idle appearance" menu
-- [ ] Release: self-installing updater + signing, installers (Windows/macOS), release workflow, README
+- [ ] macOS: camera-notch attachment and the "Idle appearance" menu are written (AppKit via objc2 in `mac.rs`, plus the tested geometry in `notch.rs`) and compiled by CI, but not yet tried on a real notched Mac
+- [x] Release pipeline: signed NSIS installer + portable exe + macOS dmgs, draft release (workflow written; Windows installer builds and signs locally, 4.5 MB)
+- [ ] Before the first release: set the repository secret `TAURI_SIGNING_PRIVATE_KEY` (the key is in `~/.f1-island-signing/`), and make the repo (or a releases repo) public so installed apps can reach `latest.json`
 - [ ] Not ported on purpose: `--screenshot=` (developer tool for the README)

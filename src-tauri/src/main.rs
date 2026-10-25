@@ -6,7 +6,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod live;
+#[cfg(target_os = "macos")]
+mod mac;
 mod menus;
+mod self_update;
 mod shell;
 
 use f1_island::analysis_data::Analyses;
@@ -142,14 +145,21 @@ fn act_on_update(app: &tauri::AppHandle) {
             let app = app.clone();
             tauri::async_runtime::spawn(async move { check_for_update(&app).await });
         }
+        updater::Act::Install => self_update::install(app),
         updater::Act::Nothing => {}
     }
 }
 
 async fn check_for_update(app: &tauri::AppHandle) {
     let updater = app.state::<Updater>();
-    if let Some(state) = updater.check(chrono::Utc::now().timestamp_millis()).await {
-        let _ = app.emit("update:state", state);
+    match updater.mode() {
+        updater::Mode::Off => {}
+        updater::Mode::Auto => self_update::check(app).await,
+        updater::Mode::Notify => {
+            if let Some(state) = updater.check(chrono::Utc::now().timestamp_millis()).await {
+                let _ = app.emit("update:state", state);
+            }
+        }
     }
 }
 
@@ -294,6 +304,8 @@ fn main() {
         .manage(shell::Shell::default())
         .manage(menus::Hotkey::default())
         .manage(menus::Choices::default())
+        .manage(self_update::Pending::default())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(News::default())
         .manage(OpenF1::default())
         .manage(Results::default())
@@ -340,6 +352,10 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
 
+            // A menu-bar utility on macOS: no Dock icon, no Cmd-Tab entry.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let settings_file = app
                 .path()
                 .app_data_dir()
@@ -370,8 +386,28 @@ fn main() {
                     url: Some(updater::RELEASES_URL.to_string()),
                     checked_at: now(),
                 });
-            } else if !cfg!(debug_assertions) {
+            } else {
+                // Installed by the installer (it left an uninstaller beside the program):
+                // updates itself. Otherwise it can only announce a new version.
+                let installed = std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| exe.parent().map(|d| d.join("uninstall.exe").exists()))
+                    .unwrap_or(false);
+                handle.state::<Updater>().set_mode(updater::update_mode(
+                    cfg!(debug_assertions),
+                    f1_island::platform::Os::current(),
+                    installed,
+                ));
                 tauri::async_runtime::spawn(watch_for_updates(handle.clone()));
+            }
+
+            // `--idle=notch` or `--idle=stretched` (Macs): how the island looks when idle.
+            if f1_island::platform::Os::current() == f1_island::platform::Os::Mac {
+                if let Some(idle) = arg("--idle=").filter(|i| i == "notch" || i == "stretched") {
+                    handle
+                        .state::<SettingsStore>()
+                        .update(|s| s.auto_hide = idle == "notch");
+                }
             }
 
             // `--docked` (debugging): dock for this run only, without saving it.

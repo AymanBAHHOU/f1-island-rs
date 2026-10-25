@@ -5,6 +5,7 @@
 
 use f1_island::dock::Point;
 use f1_island::geometry::{self, Area, EDGE};
+use f1_island::notch::{self, Notch};
 use f1_island::platform::Os;
 use f1_island::settings::{Position, SettingsStore};
 use serde::Deserialize;
@@ -36,6 +37,28 @@ pub struct Shell {
     slide_id: AtomicU64,
     sliding: AtomicBool,
     big: Mutex<Option<BigState>>,
+    /// The camera notches of the screens that have one (Macs only).
+    notches: Mutex<Vec<NotchScreen>>,
+    /// The notch the island is attached to, if any.
+    attached: Mutex<Option<NotchScreen>>,
+}
+
+/// A notch with the screen it is on, in physical pixels.
+#[derive(Clone, Copy, PartialEq)]
+struct NotchScreen {
+    /// The whole screen (not just its usable area): how the notch is matched to a screen.
+    monitor: Area,
+    notch: Notch,
+    scale: f64,
+}
+
+impl NotchScreen {
+    /// The notch as the page wants it: in CSS pixels.
+    fn for_page(&self) -> Value {
+        let s = self.scale;
+        json!({"id": self.notch.id, "width": self.notch.width / s, "height": self.notch.height / s,
+               "centerX": self.notch.center_x / s, "top": self.notch.top / s})
+    }
 }
 
 /// The window while the analysis view is open.
@@ -59,6 +82,8 @@ pub struct RectArg {
 #[derive(Clone, Copy)]
 struct Screen {
     work: Area,
+    /// The whole screen.
+    monitor: Area,
     scale: f64,
     primary: bool,
 }
@@ -71,6 +96,12 @@ fn screens(win: &WebviewWindow) -> Vec<Screen> {
         .map(|m| {
             let w = m.work_area();
             Screen {
+                monitor: Area::new(
+                    f64::from(m.position().x),
+                    f64::from(m.position().y),
+                    f64::from(m.size().width),
+                    f64::from(m.size().height),
+                ),
                 work: Area::new(
                     f64::from(w.position.x),
                     f64::from(w.position.y),
@@ -98,6 +129,112 @@ fn screen_for(win: &WebviewWindow, pos: Point) -> Option<Screen> {
 fn primary_screen(win: &WebviewWindow) -> Option<Screen> {
     let all = screens(win);
     all.iter().find(|s| s.primary).or(all.first()).copied()
+}
+
+// ---------- the camera notch ----------
+
+/// The notch of this screen, if it has one.
+fn notch_of(app: &AppHandle, screen: &Screen) -> Option<NotchScreen> {
+    app.state::<Shell>()
+        .notches
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|n| n.monitor.x == screen.monitor.x && n.monitor.y == screen.monitor.y)
+        .copied()
+}
+
+/// The screen the island lives on when attached: the primary one if it has a notch, else
+/// the first with one, else the primary.
+fn home_screen(app: &AppHandle, win: &WebviewWindow) -> Option<Screen> {
+    let all = screens(win);
+    let primary = all.iter().find(|s| s.primary).or(all.first()).copied()?;
+    if notch_of(app, &primary).is_some() {
+        return Some(primary);
+    }
+    Some(
+        all.iter()
+            .find(|s| notch_of(app, s).is_some())
+            .copied()
+            .unwrap_or(primary),
+    )
+}
+
+/// Window origin that hangs the island from this screen's notch.
+fn notch_home(n: &NotchScreen) -> Point {
+    let (w, _) = geometry::window_size(n.scale);
+    notch::notch_origin(&n.notch, w, EDGE * n.scale)
+}
+
+/// Reads the notches of the screens (Macs only; nothing elsewhere).
+pub fn refresh_notches(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(win) = window(app) else { return };
+        let reported = crate::mac::read_notches_blocking(&win);
+        let found: Vec<NotchScreen> = screens(&win)
+            .iter()
+            .filter_map(|screen| {
+                let scale = screen.scale;
+                // AppKit speaks in points; the screens here are in pixels.
+                let r = reported.iter().find(|r| {
+                    (r.screen_x * scale - screen.monitor.x).abs() < 2.0
+                        && (r.screen_width * scale - screen.monitor.width).abs() < 2.0
+                })?;
+                let notch = notch::notch_for_screen(
+                    notch::Screen {
+                        id: 0,
+                        x: screen.monitor.x,
+                        y: screen.monitor.y,
+                        width: screen.monitor.width,
+                    },
+                    &[notch::Reported {
+                        id: 0,
+                        width: r.notch_width * scale,
+                        height: r.notch_height * scale,
+                        center_x: r.center_x * scale,
+                    }],
+                )?;
+                Some(NotchScreen {
+                    monitor: screen.monitor,
+                    notch,
+                    scale,
+                })
+            })
+            .collect();
+        *app.state::<Shell>().notches.lock().unwrap() = found;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
+/// Is the island sitting exactly at a notch's home? Then it is attached to it.
+fn update_attachment(app: &AppHandle, win: &WebviewWindow, pos: Point) {
+    let next = screen_for(win, pos)
+        .and_then(|screen| notch_of(app, &screen))
+        .filter(|n| {
+            let home = notch_home(n);
+            (pos.x - home.x).abs() <= 1.0 && (pos.y - home.y).abs() <= 1.0
+        });
+    set_attachment(app, win, next);
+}
+
+fn set_attachment(app: &AppHandle, win: &WebviewWindow, next: Option<NotchScreen>) {
+    let shell = app.state::<Shell>();
+    {
+        let mut attached = shell.attached.lock().unwrap();
+        if *attached == next {
+            return;
+        }
+        *attached = next;
+    }
+    // Only the notch-attached mode draws over the menu-bar strip.
+    #[cfg(target_os = "macos")]
+    crate::mac::set_level(win, next.is_some());
+    #[cfg(not(target_os = "macos"))]
+    let _ = win;
+    let _ = app.emit("island:notch", next.map(|n| n.for_page()));
+    crate::menus::refresh_tray_menu(app);
 }
 
 // ---------- the window ----------
@@ -172,6 +309,9 @@ pub fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .visible(false)
         .build()?;
     win.set_ignore_cursor_events(true)?;
+    #[cfg(target_os = "macos")]
+    crate::mac::show_on_all_spaces(&win);
+    refresh_notches(app);
     place_window(app);
     win.show()?;
     Ok(win)
@@ -196,15 +336,26 @@ pub fn place_window(app: &AppHandle) {
         .position
         .map(|p| Point { x: p.x, y: p.y });
 
+    let attach = app.state::<SettingsStore>().get().notch_attached;
+    let home = if attach {
+        home_screen(app, &win).unwrap_or(primary)
+    } else {
+        primary
+    };
     let pos = if is_docked(app) {
         // Docked: top centre of the screen the island was last on.
-        let on = saved.and_then(|s| screen_for(&win, s)).unwrap_or(primary);
+        let on = saved
+            .and_then(|s| screen_for(&win, s))
+            .or_else(|| home_screen(app, &win))
+            .unwrap_or(primary);
         geometry::top_centre(on.work, on.scale, true)
+    } else if let Some(n) = notch_of(app, &home).filter(|_| attach) {
+        notch_home(&n)
     } else if let Some(saved) = saved {
         let on = screen_for(&win, saved).unwrap_or(primary);
         geometry::clamp_to_screen(saved, on.work, on.scale)
     } else {
-        geometry::top_centre(primary.work, primary.scale, false)
+        geometry::top_centre(home.work, home.scale, false)
     };
 
     let in_big = shell.big.lock().unwrap().is_some();
@@ -218,10 +369,12 @@ pub fn place_window(app: &AppHandle) {
             state.normal = normal;
             state.size = (big.bounds.width, big.bounds.height);
         }
+        update_attachment(app, &win, pos);
         apply_bounds(&win, big.bounds);
         let _ = app.emit("island:big-geometry", big_json(&big));
     } else {
         set_pos(&win, pos);
+        update_attachment(app, &win, pos);
     }
 }
 
@@ -316,6 +469,11 @@ pub fn drag_start(app: AppHandle, shell: tauri::State<Shell>) {
     if is_docked(&app) {
         set_docked(&app, false); // dragging a docked island detaches it
     }
+    if shell.attached.lock().unwrap().is_some() {
+        set_attachment(&app, &win, None);
+        app.state::<SettingsStore>()
+            .update(|s| s.notch_attached = false);
+    }
     let (Ok(c), start) = (win.cursor_position(), origin(&win)) else {
         shell.dragging.store(false, Ordering::Relaxed);
         return;
@@ -358,21 +516,39 @@ pub fn drag_end(app: AppHandle, shell: tauri::State<Shell>) {
         return;
     }
 
-    let clamped = geometry::clamp_to_screen(pos, on.work, on.scale);
-    // Windows/Linux: dropped near the top centre, the island docks there.
-    let drop = geometry::drop_island(clamped, on.work, on.scale);
+    let (win_w, _) = geometry::window_size(on.scale);
+    let here = notch_of(&app, &on);
+    let magnet = notch::magnet_origin(pos, here.as_ref().map(|n| &n.notch), win_w, EDGE * on.scale);
+    let clamped = magnet.unwrap_or_else(|| geometry::clamp_to_screen(pos, on.work, on.scale));
+    let drop = match &here {
+        // A screen with a notch: dropped close to it, the island attaches.
+        Some(n) => {
+            let home = notch_home(n);
+            let snapped = (clamped.x - home.x).abs() <= 1.0 && (clamped.y - home.y).abs() <= 1.0;
+            geometry::Drop {
+                pos: clamped,
+                dock_snap: false,
+                snapped,
+            }
+        }
+        // Windows/Linux: dropped near the top centre, the island docks there.
+        None => geometry::drop_island(clamped, on.work, on.scale),
+    };
     if drop.dock_snap {
         slide_to(&app, drop.pos, || {});
     } else {
         set_pos(&win, drop.pos);
     }
+    update_attachment(&app, &win, drop.pos);
     // Snapping to the primary screen's top centre is the default spot.
     let is_default = drop.snapped && on.primary;
+    let attached = app.state::<Shell>().attached.lock().unwrap().is_some();
     settings.update(|s| {
         s.position = (!is_default).then_some(Position {
             x: drop.pos.x,
             y: drop.pos.y,
         });
+        s.notch_attached = attached;
     });
     set_docked(&app, drop.dock_snap);
 }
@@ -381,18 +557,33 @@ pub fn drag_end(app: AppHandle, shell: tauri::State<Shell>) {
 /// close, and move the small island's home under its top centre so leaving big mode lands
 /// there.
 fn end_big_drag(app: &AppHandle, win: &WebviewWindow, pos: Point, size: (f64, f64), on: Screen) {
-    let drop = geometry::drop_big(pos, size, on.work, on.scale);
+    let mut drop = geometry::drop_big(pos, size, on.work, on.scale);
     let settings = app.state::<SettingsStore>();
     let (win_w, win_h) = geometry::window_size(on.scale);
+    // Dropped close to the camera notch, the island attaches to it.
+    if let Some(n) = notch_of(app, &on) {
+        if let Some(home) = notch::magnet_origin(pos, Some(&n.notch), size.0, EDGE * on.scale) {
+            let normal = notch_home(&n);
+            drop = geometry::BigDrop {
+                pos: home,
+                snapped: true,
+                normal,
+                anchor_x: (normal.x + win_w / 2.0 - home.x) / on.scale,
+            };
+        }
+    }
     if let Some(big) = app.state::<Shell>().big.lock().unwrap().as_mut() {
         big.normal = Area::new(drop.normal.x, drop.normal.y, win_w, win_h);
     }
+    update_attachment(app, win, drop.normal);
     let is_default = drop.snapped && on.primary;
+    let attached = app.state::<Shell>().attached.lock().unwrap().is_some();
     settings.update(|s| {
         s.position = (!is_default).then_some(Position {
             x: drop.normal.x,
             y: drop.normal.y,
         });
+        s.notch_attached = attached;
     });
     set_docked(app, drop.snapped);
 
@@ -494,9 +685,15 @@ pub fn report_pinned(on: bool, shell: tauri::State<Shell>) {
     shell.pinned.store(on, Ordering::Relaxed);
 }
 
+/// Is the island hanging from a camera notch?
+pub fn is_attached(app: &AppHandle) -> bool {
+    app.state::<Shell>().attached.lock().unwrap().is_some()
+}
+
+/// The notch the island is attached to (only Macs with a camera notch have one).
 #[tauri::command]
-pub fn get_notch() -> Option<Value> {
-    None // only Macs with a camera notch have one
+pub fn get_notch(shell: tauri::State<Shell>) -> Option<Value> {
+    shell.attached.lock().unwrap().map(|n| n.for_page())
 }
 
 // ---------- hover ----------
@@ -524,15 +721,15 @@ pub fn start_hover_polling(app: AppHandle) {
             continue;
         };
         let scale = win.scale_factor().unwrap_or(1.0);
-        let inside = geometry::pointer_in_island(
-            Point {
-                x: cursor.x,
-                y: cursor.y,
-            },
-            origin(&win),
-            scale,
-            rect,
-        );
+        let cursor = Point {
+            x: cursor.x,
+            y: cursor.y,
+        };
+        // The camera cutout can't emit page events, so the pointer is also checked against
+        // its real position, even when the island is hidden.
+        let attached = shell.attached.lock().unwrap().map(|n| n.notch);
+        let inside = notch::contains_notch(cursor, attached.as_ref())
+            || geometry::pointer_in_island(cursor, origin(&win), scale, rect);
         if inside != shell.hovering.load(Ordering::Relaxed) {
             shell.hovering.store(inside, Ordering::Relaxed);
             let _ = win.emit("hover", inside);
@@ -573,6 +770,7 @@ pub fn start_display_watch(app: AppHandle) {
             if now != known || woke {
                 known = now;
                 std::thread::sleep(Duration::from_millis(150));
+                refresh_notches(&app);
                 place_window(&app);
                 crate::menus::refresh_tray_menu(&app);
                 if woke {

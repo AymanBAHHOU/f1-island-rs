@@ -15,13 +15,35 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "category": "Sports",
+    "shortDescription": "A Dynamic Island for Formula 1",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBMDgzNjk3NkU0MjkyRjQKUldUMGtrSnVsellJQ3N2ckdYYUl2aUdyaVkyQzE0M1pCTitqQjlwcXN0L2JBYUhVRXBOZFQwS0oK",
+      "endpoints": [
+        "https://github.com/AymanBAHHOU/f1-island-rs/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
