@@ -1,6 +1,6 @@
 [package]
 name = "f1-island"
-version = "0.0.1"
+version = "0.1.0"
 description = "F1 Island, rewritten in Rust with Tauri"
 edition = "2021"
 license = "MIT"
