@@ -56,10 +56,10 @@
 
   window.f1 = {
     snapshot,
-    news: unsupported('News'),
+    news: () => invoke('news'),
     trackMap: unsupported('Track map'),
     weekendResults: unsupported('Weekend results'),
-    openArticle: noop,
+    openArticle: (url) => invoke('open_article', { url }),
     settings: () =>
       Promise.resolve({
         autoHide: false,
