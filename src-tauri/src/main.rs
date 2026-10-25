@@ -9,11 +9,13 @@ mod live;
 
 use f1_island::analysis_data::Analyses;
 use f1_island::circuit::CircuitHistory;
+use f1_island::demo;
 use f1_island::jolpica::Jolpica;
 use f1_island::news::{self, News};
 use f1_island::openf1::OpenF1;
 use f1_island::results::{self, Results};
 use f1_island::schedule::Weekend;
+use f1_island::settings::{Settings, SettingsStore};
 use f1_island::snapshot::Snapshots;
 use f1_island::standings::Standings;
 use serde::Deserialize;
@@ -98,6 +100,29 @@ async fn snapshot(
 #[tauri::command]
 fn preview_alerts(app: tauri::AppHandle) {
     live::preview_alerts(&app);
+}
+
+// ---------- settings and the preview mode ----------
+
+#[tauri::command]
+fn get_settings(settings: tauri::State<SettingsStore>) -> Settings {
+    settings.get()
+}
+
+// The pretend race being previewed (see `demo`), if any.
+#[derive(Default)]
+struct DemoState(Mutex<Option<serde_json::Value>>);
+
+#[tauri::command]
+fn get_demo(demo: tauri::State<DemoState>) -> Option<serde_json::Value> {
+    demo.0.lock().unwrap().clone()
+}
+
+// Starts a preview (`None` stops it) and tells the page.
+fn set_demo(app: &tauri::AppHandle, mode: Option<&str>) {
+    let demo = mode.and_then(|m| demo::create(m, chrono::Utc::now().timestamp_millis()));
+    *app.state::<DemoState>().0.lock().unwrap() = demo.clone();
+    let _ = app.emit("island:demo", demo);
 }
 
 fn now() -> i64 {
@@ -271,6 +296,7 @@ fn main() {
         .manage(Results::default())
         .manage(Snapshots::default())
         .manage(Analyses::default())
+        .manage(DemoState::default())
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -292,12 +318,29 @@ fn main() {
             replay_info,
             replay_chunk,
             track_map,
-            preview_alerts
+            preview_alerts,
+            get_settings,
+            get_demo
         ])
         .setup(|app| {
             let win = app
                 .get_webview_window("main")
                 .expect("the window from tauri.conf.json");
+
+            let settings_file = app
+                .path()
+                .app_data_dir()
+                .map(|d| d.join("settings.json"))
+                .unwrap_or_else(|_| "settings.json".into());
+            app.manage(SettingsStore::load(settings_file));
+
+            // `--demo=race` (or next, safety-car, red-flag, penalty) starts in a preview.
+            let handle = app.handle();
+            if let Some(mode) =
+                std::env::args().find_map(|a| a.strip_prefix("--demo=").map(str::to_string))
+            {
+                set_demo(handle, Some(&mode));
+            }
 
             if std::env::args().any(|a| a == "--demo-alerts") {
                 let handle = app.handle().clone();
