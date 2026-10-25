@@ -3,10 +3,13 @@
 //!
 //! Run the tests with `cargo test --lib` from `src-tauri/`.
 
+pub mod circuit;
 pub mod clock;
 pub mod dock;
+pub mod ergast;
 pub mod jolpica;
 pub mod live_tab;
 pub mod schedule;
+pub mod standings;
 pub mod status_log;
 pub mod version;

@@ -6,6 +6,7 @@
   --muted: #8e8e93;
   --red: #e10600;
   --chip: rgba(255, 255, 255, 0.07);
+  --dim: #48484a;
   --edge: 32px; /* matches EDGE in main.rs */
   --spring: cubic-bezier(0.32, 1.28, 0.5, 1);
 }
@@ -49,7 +50,7 @@ body {
 
 #island.open {
   width: 440px;
-  height: 372px;
+  /* the height is set from the content by main.js */
   border-radius: 30px;
 }
 
@@ -87,8 +88,11 @@ body {
 }
 
 .expanded {
+  /* Top-left only (no bottom): it is as tall as its content, and main.js sizes the
+     island to match. */
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 440px;
   box-sizing: border-box;
   padding: 18px 22px;
@@ -191,4 +195,153 @@ h1 {
 
 .sessions li.live .s-when {
   color: var(--red);
+}
+
+/* ---------- tabs and the Standings / Circuit pages ---------- */
+
+.pages {
+  display: flex;
+  margin-top: 10px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--chip);
+}
+
+.pages button {
+  flex: 1;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pages button.active {
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.expanded section[hidden] {
+  display: none;
+}
+
+.message {
+  padding: 14px 0;
+  color: var(--muted);
+}
+
+h2 {
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h2.spaced {
+  margin-top: 16px;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.cols h2 {
+  margin-top: 14px;
+}
+
+.rows,
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.rows li,
+.facts li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.pos {
+  width: 16px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.code {
+  font-weight: 700;
+}
+
+.pts,
+.val {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.facts li {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.facts .label {
+  width: 62px;
+  color: var(--muted);
+}
+
+.facts .val small {
+  color: var(--dim);
+}
+
+.team {
+  flex: none;
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--team);
+}
+
+.last-race {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.last-race h2 {
+  margin: 14px 0 6px;
+}
+
+.last-podium,
+.winners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.pod,
+.winners span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pod small,
+.winners small {
+  color: var(--muted);
+}
+
+.winners span {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--chip);
 }
