@@ -9,6 +9,7 @@ mod live;
 
 use f1_island::circuit::CircuitHistory;
 use f1_island::jolpica::Jolpica;
+use f1_island::news::{self, News};
 use f1_island::schedule::Weekend;
 use f1_island::standings::Standings;
 use serde::Deserialize;
@@ -61,6 +62,20 @@ async fn circuit_history(
         .map_err(|e| e.to_string())
 }
 
+// The headlines, merged from several feeds.
+#[tauri::command]
+async fn news(news: tauri::State<'_, News>) -> Result<Vec<news::Item>, String> {
+    news.headlines().await
+}
+
+// Opens a headline in the browser, but only links we handed out ourselves.
+#[tauri::command]
+fn open_article(url: String, news: tauri::State<News>) {
+    if news.is_known_link(&url) {
+        let _ = open::that(url);
+    }
+}
+
 // ---------- where the island is, so we know when the mouse is over it ----------
 
 // The page tells us the island's rectangle (in CSS pixels, relative to the window).
@@ -109,6 +124,7 @@ fn main() {
     tauri::Builder::default()
         .manage(HitRect::default())
         .manage(Hovering::default())
+        .manage(News::default())
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -118,7 +134,9 @@ fn main() {
             live::live_state,
             report_rect,
             set_interactive,
-            rehover
+            rehover,
+            news,
+            open_article
         ])
         .setup(|app| {
             let win = app
