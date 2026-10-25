@@ -49,7 +49,7 @@ body {
 
 #island.open {
   width: 440px;
-  height: 214px;
+  height: 372px;
   border-radius: 30px;
 }
 
@@ -142,8 +142,53 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
-.note {
-  margin: 10px 0 0;
+
+.c-right b {
+  color: var(--fg);
+}
+
+.c-right b.live {
+  color: var(--red);
+}
+
+.sessions {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.sessions li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessions li + li {
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.sessions .s-short {
+  width: 38px;
+  font-weight: 700;
+}
+
+.sessions .s-when {
   color: var(--muted);
-  font-size: 11px;
+}
+
+.sessions li.done {
+  opacity: 0.4;
+}
+
+.sessions li.next,
+.sessions li.live {
+  background: var(--chip);
+  box-shadow: none;
+}
+
+.sessions li.live .s-when {
+  color: var(--red);
 }

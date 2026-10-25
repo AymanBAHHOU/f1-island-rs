@@ -1,13 +1,15 @@
-// F1 Island, stage 1: a transparent, always-on-top window that shows the island,
+// F1 Island, stages 1 and 3: a transparent, always-on-top window that shows the island,
 // lets clicks fall through to whatever is underneath, and opens when the mouse
 // is over the island. Same idea as the Electron app's main.js, in Rust.
 
 // In release builds, don't open a console window next to the app (Windows only).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::{Deserialize, Serialize};
+use f1_island::jolpica::Jolpica;
+use f1_island::schedule::Weekend;
+use serde::Deserialize;
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tauri::{Emitter, Manager, PhysicalPosition};
 
 // The window is bigger than the island and transparent. The island sits EDGE
@@ -16,35 +18,19 @@ use tauri::{Emitter, Manager, PhysicalPosition};
 const EDGE: f64 = 32.0;
 const TOP_GAP: f64 = 8.0;
 
-// ---------- data sent to the page ----------
-
-// `#[derive(Serialize)]` generates the code that turns this struct into JSON, so
-// the page can receive it. `String` owns its text; `i64` is a 64-bit whole number.
-#[derive(Serialize)]
-struct Status {
-    title: String,
-    subtitle: String,
-    next: String,
-    starts_in_secs: i64,
-}
+// ---------- data for the page ----------
 
 // A command is a Rust function the page can call by name:
-//   await window.__TAURI__.core.invoke('island_status')
-// Stage 1 invents the data; stage 3 will fetch the real schedule here.
+//   await window.__TAURI__.core.invoke('weekend')
+//
+// This one is `async`: while it waits for the network, the app keeps running. The
+// `Jolpica` client was handed to Tauri with `.manage(...)` below; `State` gives the
+// command a reference to it (the `'_` is a lifetime Rust needs to see for async commands).
+// Errors become text, which the page receives as a rejected promise.
 #[tauri::command]
-fn island_status() -> Status {
-    // Pretend the next session starts at the top of the next hour.
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0); // if the clock is before 1970, use 0 instead of failing
-    let next_hour = (now / 3600 + 1) * 3600;
-    Status {
-        title: "United States Grand Prix".to_string(),
-        subtitle: "Circuit of the Americas · USA".to_string(),
-        next: "Practice 3".to_string(),
-        starts_in_secs: (next_hour - now) as i64,
-    }
+async fn weekend(jolpica: tauri::State<'_, Jolpica>) -> Result<Option<Weekend>, String> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    jolpica.weekend(now_ms).await.map_err(|e| e.to_string())
 }
 
 // ---------- where the island is, so we know when the mouse is over it ----------
@@ -74,7 +60,8 @@ fn report_rect(rect: Rect, state: tauri::State<HitRect>) {
 fn main() {
     tauri::Builder::default()
         .manage(HitRect::default())
-        .invoke_handler(tauri::generate_handler![island_status, report_rect])
+        .manage(Jolpica::new())
+        .invoke_handler(tauri::generate_handler![weekend, report_rect])
         .setup(|app| {
             let win = app
                 .get_webview_window("main")

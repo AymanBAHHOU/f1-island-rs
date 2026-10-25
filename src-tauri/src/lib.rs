@@ -5,6 +5,8 @@
 
 pub mod clock;
 pub mod dock;
+pub mod jolpica;
 pub mod live_tab;
+pub mod schedule;
 pub mod status_log;
 pub mod version;
