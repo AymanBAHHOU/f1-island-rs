@@ -335,6 +335,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs the network"]
     async fn the_real_feed_sends_a_snapshot_and_then_a_summary() {
+        crate::install_tls_provider();
         let (tx, mut rx) = mpsc::unbounded_channel();
         let (stop_tx, stop_rx) = watch::channel(false);
         let task = tokio::spawn(run(tx, stop_rx));

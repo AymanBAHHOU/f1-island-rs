@@ -291,6 +291,7 @@ async fn weekend_results(
 }
 
 fn main() {
+    f1_island::install_tls_provider();
     tauri::Builder::default()
         // Must come first: a second launch asks the running island to show itself.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
