@@ -12,6 +12,7 @@ use f1_island::jolpica::Jolpica;
 use f1_island::schedule::Weekend;
 use f1_island::standings::Standings;
 use serde::Deserialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, PhysicalPosition};
@@ -82,11 +83,32 @@ fn report_rect(rect: Rect, state: tauri::State<HitRect>) {
     *state.0.lock().unwrap() = Some(rect);
 }
 
+// Whether the pointer was over the island at the last check. Shared so the page can ask for
+// the next check to report again (see `rehover`).
+#[derive(Default)]
+struct Hovering(AtomicBool);
+
+// The window is click-through until the page says otherwise: the page asks for clicks
+// when the island is open, and gives them back when it closes. (Same split as the Electron
+// app: the main process reports where the mouse is, the page decides what that means.)
+#[tauri::command]
+fn set_interactive(on: bool, window: tauri::WebviewWindow) {
+    let _ = window.set_ignore_cursor_events(!on);
+}
+
+// "Tell me again whether the pointer is on the island": clears the remembered answer, so
+// the next check reports even if nothing changed.
+#[tauri::command]
+fn rehover(hovering: tauri::State<Hovering>) {
+    hovering.0.store(false, Ordering::Relaxed);
+}
+
 // ---------- the window ----------
 
 fn main() {
     tauri::Builder::default()
         .manage(HitRect::default())
+        .manage(Hovering::default())
         .manage(Jolpica::new())
         .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
@@ -94,7 +116,9 @@ fn main() {
             standings,
             circuit_history,
             live::live_state,
-            report_rect
+            report_rect,
+            set_interactive,
+            rehover
         ])
         .setup(|app| {
             let win = app
@@ -120,7 +144,6 @@ fn main() {
             // and tells the page, which opens or closes the island.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let mut hovering = false;
                 loop {
                     std::thread::sleep(Duration::from_millis(50));
 
@@ -141,9 +164,9 @@ fn main() {
                         x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
                     });
 
-                    if inside != hovering {
-                        hovering = inside;
-                        let _ = win.set_ignore_cursor_events(!inside);
+                    let hovering = handle.state::<Hovering>();
+                    if inside != hovering.0.load(Ordering::Relaxed) {
+                        hovering.0.store(inside, Ordering::Relaxed);
                         let _ = win.emit("hover", inside);
                     }
                 }

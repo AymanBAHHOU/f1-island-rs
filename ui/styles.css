@@ -1,0 +1,1837 @@
+:root {
+  --island: #000;
+  --fg: #f5f5f7;
+  --muted: #8e8e93;
+  --dim: #48484a;
+  --red: #e10600;
+  --green: #30d158;
+  --line: rgba(255, 255, 255, 0.08);
+  --chip: rgba(255, 255, 255, 0.06);
+  --spring: cubic-bezier(0.32, 1.28, 0.5, 1);
+  --compact-w: 300px;
+  --edge: 32px; /* transparent margin for shadows/glow; matches EDGE in main.js */
+  --expanded-w: 440px;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Invisible hover target around the island, so the auto-hide sliver is easy to hit. */
+#zone {
+  position: absolute;
+  top: var(--edge);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  min-width: var(--compact-w);
+  min-height: 38px;
+}
+
+/* Slides back to its anchor when leaving the big (analysis) view. */
+#zone {
+  transition: left 0.45s var(--spring);
+}
+
+#zone.autohide {
+  min-width: 220px;
+  min-height: 22px;
+}
+
+#zone.dragging {
+  cursor: grabbing;
+}
+
+#island {
+  position: relative;
+  flex: none;
+  width: var(--compact-w);
+  height: 38px;
+  background: var(--island);
+  border-radius: 19px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transition:
+    width 0.45s var(--spring),
+    height 0.45s var(--spring),
+    border-radius 0.45s ease,
+    opacity 0.3s ease;
+}
+
+/* Double expanded: the session analysis view. Size comes from the window. */
+#island.big {
+  width: var(--big-w, 940px);
+  border-radius: 34px;
+}
+
+#island.big .compact {
+  opacity: 0;
+}
+
+/* Auto-hidden: a faint sliver until hovered or summoned. */
+#island.hidden {
+  width: 110px;
+  height: 5px;
+  border-radius: 3px;
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+#island.hidden .compact {
+  opacity: 0;
+}
+
+#island.expanded {
+  width: var(--expanded-w);
+  border-radius: 30px;
+}
+
+/* ---------- compact ---------- */
+
+.compact {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 0 14px;
+  white-space: nowrap;
+  transition: opacity 0.18s ease;
+}
+
+#island.expanded .compact {
+  opacity: 0;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.dot.live {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(225, 6, 0, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(225, 6, 0, 0);
+  }
+}
+
+.c-label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-label.demo-label { flex-shrink: 0; color: #ff9f0a; font-size: 10px; letter-spacing: 0.05em; }
+
+.c-right {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.c-right b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.c-right .live-tag {
+  color: var(--red);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- expanded ---------- */
+
+.expanded-view {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--expanded-w);
+  padding: 18px 22px 20px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#island.expanded .expanded-view {
+  opacity: 1;
+  transition: opacity 0.25s ease 0.12s;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+h1 {
+  margin: 2px 0 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sub {
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.hero {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--chip);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hero-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hero-label strong {
+  display: block;
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hero-time {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.hero.live {
+  background: rgba(225, 6, 0, 0.14);
+}
+
+.hero.live .hero-label strong::before {
+  content: 'LIVE ';
+  color: var(--red);
+  font-weight: 800;
+}
+
+.live-top {
+  display: flex;
+  gap: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-top span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.live-top em {
+  font-style: normal;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* The weekend as a list: one row per session. */
+.schedule {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.schedule li {
+  display: grid;
+  grid-template-columns: 36px 74px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 7px 10px;
+  border-radius: 12px;
+}
+
+.schedule li + li {
+  box-shadow: 0 -1px 0 var(--line);
+}
+
+.schedule .s-short {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.schedule .s-when {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.schedule .s-res {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.schedule .s-go {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  text-align: right;
+}
+
+.schedule li[data-start] {
+  cursor: pointer;
+}
+
+.schedule li[data-start]:hover,
+.schedule li.next,
+.schedule li.live {
+  background: var(--chip);
+  box-shadow: none;
+}
+
+.schedule li[data-start]:hover + li,
+.schedule li.next + li,
+.schedule li.live + li {
+  box-shadow: none;
+}
+
+.schedule li.live {
+  background: rgba(225, 6, 0, 0.14);
+}
+
+.schedule li.upcoming .s-short {
+  color: var(--muted);
+}
+
+.schedule .s-wait {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pill {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pill.live {
+  background: var(--red);
+  color: #fff;
+}
+
+/* A driver in a top three: team bar, code, time or gap. */
+.pod {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pod b {
+  font-weight: 600;
+}
+
+.pod small {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-hint {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.last-race {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.last-race h2 {
+  margin: 0;
+}
+
+.last-podium {
+  display: flex;
+  gap: 12px;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.rows .pos {
+  width: 16px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.team {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--team, var(--dim));
+  flex: none;
+}
+
+.rows .code {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.rows .pts {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.message {
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+.menu-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--muted);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.menu-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--fg);
+}
+
+/* Locked open ("Keep open" / clicked): tint the menu button as a reminder. */
+#island.pinned .menu-btn {
+  background: rgba(225, 6, 0, 0.2);
+  color: var(--red);
+}
+
+.analysis-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--chip);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.analysis-btn span {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.analysis-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- pages ---------- */
+
+.pages {
+  display: flex;
+  gap: 3px;
+  margin-top: 12px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--chip);
+}
+
+.pages button {
+  flex: 1;
+  padding: 5px 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pages button:hover {
+  color: var(--fg);
+}
+
+.pages button.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--fg);
+}
+
+.page-body {
+  margin-top: 12px;
+}
+
+.cols.page-body {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.rows .gap {
+  width: 34px;
+  text-align: right;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.rows .name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+h2.spaced {
+  margin-top: 14px;
+}
+
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.facts li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts .label {
+  width: 70px;
+  flex: none;
+  color: var(--muted);
+}
+
+.facts .code {
+  font-weight: 600;
+}
+
+.facts .val {
+  margin-left: auto;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.facts small,
+.winners small {
+  color: var(--dim);
+}
+
+.winners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.winners span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--chip);
+}
+
+.news-list {
+  list-style: none;
+  padding: 0;
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+.news-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.news-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.news-list li {
+  border-bottom: 1px solid var(--line);
+}
+
+.news-list li:last-child {
+  border-bottom: 0;
+}
+
+.news-head {
+  display: block;
+  width: 100%;
+  padding: 8px 4px 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.news-head:hover .n-title {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+}
+
+.n-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.n-meta b {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.n-title {
+  margin-top: 2px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #e5e5ea;
+}
+
+.n-summary {
+  margin: 0 0 8px;
+  color: #c7c7cc;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.news-open {
+  margin-bottom: 10px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.news-open:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.page-body > .cols:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* ---------- live flags & alerts ---------- */
+
+#island {
+  --amber: #ff9f0a;
+  --yellow: #ffd60a;
+  --blue: #0a84ff;
+}
+
+/* Colour per alert level, used by tiles, tags, banners and the glow. */
+.red { --c: var(--red); --on: #fff; }
+.sc,
+.vsc { --c: var(--amber); --on: #000; }
+.yellow { --c: var(--yellow); --on: #000; }
+.green { --c: var(--green); --on: #000; }
+.info { --c: var(--blue); --on: #fff; }
+.chequered { --c: #fff; --on: #000; }
+
+/* A flag in force (SC, VSC, red, yellow) rings the island. */
+#island[data-track='red'] { box-shadow: 0 0 0 2px var(--red), 0 8px 24px rgba(0, 0, 0, 0.35); }
+#island[data-track='sc'],
+#island[data-track='vsc'] { box-shadow: 0 0 0 2px var(--amber), 0 8px 24px rgba(0, 0, 0, 0.35); }
+#island[data-track='yellow'] { box-shadow: 0 0 0 1.5px var(--yellow), 0 8px 24px rgba(0, 0, 0, 0.35); }
+
+.flag-tag {
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--c);
+  color: var(--on);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* Alert: the island pops out wider with a coloured flag tile. */
+#island.alert {
+  width: 410px;
+  height: 66px;
+  border-radius: 33px;
+}
+
+#island.alert .compact {
+  opacity: 0;
+}
+
+.alert-view {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 66px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 22px 0 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+#island.alert .alert-view {
+  opacity: 1;
+  transition: opacity 0.25s ease 0.15s;
+}
+
+#island.alert[data-level='red'],
+#island.alert[data-level='sc'],
+#island.alert[data-level='vsc'] {
+  animation: alert-glow 1.1s ease-in-out infinite;
+}
+
+@keyframes alert-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--glow), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--glow), 0 0 28px 4px var(--glow);
+  }
+}
+
+#island[data-level='red'] { --glow: rgba(225, 6, 0, 0.85); }
+#island[data-level='sc'],
+#island[data-level='vsc'] { --glow: rgba(255, 159, 10, 0.85); }
+
+.flag-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: var(--c);
+  color: var(--on);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.flag-tile.chequered {
+  background: repeating-conic-gradient(#f5f5f7 0 25%, #1c1c1e 0 50%) 0 0 / 14px 14px;
+}
+
+.flag-tile.small {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.flag-tile.small svg {
+  width: 15px;
+  height: 15px;
+}
+
+.flag-tile.small.chequered {
+  background-size: 9px 9px;
+}
+
+.a-text {
+  min-width: 0;
+}
+
+.a-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.a-sub {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inside the expanded island the alert shows as a banner. */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.alert-banner b {
+  display: block;
+  font-size: 13px;
+}
+
+.alert-banner > div > span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 330px;
+}
+
+.circuit-map {
+  margin-bottom: 10px;
+  padding: 6px 0;
+  border-radius: 14px;
+  background: var(--chip);
+}
+
+.circuit-map.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 396 / 128;
+  box-sizing: content-box;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.circuit-map.placeholder {
+  position: relative;
+}
+
+.circuit-map.placeholder svg {
+  position: absolute;
+  inset: 6px 0;
+  height: calc(100% - 12px);
+}
+
+.circuit-map.placeholder span {
+  position: relative;
+  margin-top: auto;
+  padding-bottom: 6px;
+}
+
+.tl-ghost,
+.tl-draw {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.tl-ghost {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 8;
+}
+
+.tl-draw {
+  stroke: rgba(229, 229, 234, 0.7);
+  stroke-width: 3;
+  stroke-dasharray: 1000;
+  animation: track-draw 3.6s cubic-bezier(0.45, 0, 0.2, 1) var(--phase, 0s) infinite;
+}
+
+@keyframes track-draw {
+  0% { stroke-dashoffset: 1000; opacity: 1; }
+  70%, 86% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* The real map's entrance: traced once from the start line, then the dot pops. */
+.circuit-map.enter .tm-line {
+  stroke-dasharray: 1000;
+  animation: track-enter 1.4s cubic-bezier(0.45, 0, 0.2, 1) both;
+}
+
+.circuit-map.enter circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sf-pop 0.4s 1.3s cubic-bezier(0.32, 1.28, 0.5, 1) both;
+}
+
+@keyframes track-enter {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes sf-pop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+/* Start lights: on one by one, then all out. */
+.start-lights {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.start-lights i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1d1d1f;
+  box-shadow: 0 0 0 4px #0e0e0f, 0 0 0 5px #222;
+  animation: 4.2s var(--phase, 0s) infinite;
+}
+
+.start-lights i:nth-child(1) { animation-name: light-1; }
+.start-lights i:nth-child(2) { animation-name: light-2; }
+.start-lights i:nth-child(3) { animation-name: light-3; }
+.start-lights i:nth-child(4) { animation-name: light-4; }
+.start-lights i:nth-child(5) { animation-name: light-5; }
+
+@keyframes light-1 { 0%, 4% { background: #1d1d1f; } 5%, 78% { background: var(--red); } 79%, 100% { background: #1d1d1f; } }
+@keyframes light-2 { 0%, 19% { background: #1d1d1f; } 20%, 78% { background: var(--red); } 79%, 100% { background: #1d1d1f; } }
+@keyframes light-3 { 0%, 34% { background: #1d1d1f; } 35%, 78% { background: var(--red); } 79%, 100% { background: #1d1d1f; } }
+@keyframes light-4 { 0%, 49% { background: #1d1d1f; } 50%, 78% { background: var(--red); } 79%, 100% { background: #1d1d1f; } }
+@keyframes light-5 { 0%, 64% { background: #1d1d1f; } 65%, 78% { background: var(--red); } 79%, 100% { background: #1d1d1f; } }
+
+.start-lights.mini {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.start-lights.mini i {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.loading-block {
+  display: grid;
+  gap: 12px;
+  padding: 18px 0 8px;
+}
+
+.loading-cap {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Start-lights intro (once per launch): each light comes on 0.2 s after the
+   last, then all go out together at 1.5 s. --phase keeps re-renders in step. */
+.start-lights.intro i {
+  animation: intro-light 1.5s var(--phase, 0s) both;
+}
+
+.start-lights.intro i:nth-child(2) { animation-duration: 1.3s; animation-delay: calc(var(--phase, 0s) + 0.2s); }
+.start-lights.intro i:nth-child(3) { animation-duration: 1.1s; animation-delay: calc(var(--phase, 0s) + 0.4s); }
+.start-lights.intro i:nth-child(4) { animation-duration: 0.9s; animation-delay: calc(var(--phase, 0s) + 0.6s); }
+.start-lights.intro i:nth-child(5) { animation-duration: 0.7s; animation-delay: calc(var(--phase, 0s) + 0.8s); }
+
+@keyframes intro-light {
+  0% { background: #1d1d1f; }
+  1%, 99% { background: var(--red); }
+  100% { background: #1d1d1f; }
+}
+
+.intro-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  border-radius: inherit;
+  background: var(--island);
+  animation: intro-reveal 0.45s calc(var(--phase, 0s) + 1.55s) both;
+}
+
+.intro-overlay span:last-child {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+  animation: intro-caption 1.6s var(--phase, 0s) both;
+}
+
+@keyframes intro-reveal {
+  to { opacity: 0; visibility: hidden; transform: scale(1.04); }
+}
+
+@keyframes intro-caption {
+  0%, 90% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Page entrance: rows slide in one after another, like a timing screen. */
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li, .last-race) {
+  animation: row-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) calc(var(--row, 0) * 45ms) both;
+}
+
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(1) { --row: 0; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(2) { --row: 1; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(3) { --row: 2; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(4) { --row: 3; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(5) { --row: 4; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(6) { --row: 5; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(7) { --row: 6; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(8) { --row: 7; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(9) { --row: 8; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(10) { --row: 9; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(11) { --row: 10; }
+.page-enter :is(.schedule li, .rows li, .facts li, .winners span, .title-rows li):nth-child(12) { --row: 11; }
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateX(-14px); }
+}
+
+/* Title: the chance bars sweep out from zero. */
+.page-enter .title-rows .chance-bar i {
+  transform-origin: left;
+  animation: bar-grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--row, 0) * 70ms + 0.1s) both;
+}
+
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-lights.intro i,
+  .intro-overlay,
+  .intro-overlay span:last-child,
+  .page-enter * {
+    animation-duration: 0.01s !important;
+    animation-delay: 0s !important;
+  }
+}
+
+/* Timing-screen skeleton: rows shaped like the table that's coming. */
+.timing-skeleton {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.sk-row {
+  display: grid;
+  grid-template-columns: 14px 3px 34px minmax(0, 1fr) 68px;
+  gap: 8px;
+  align-items: center;
+}
+
+.sk {
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #1c1c1e 0%, #2c2c2e 40%, #1c1c1e 80%) 0 0 / 300% 100%;
+  animation: shimmer 1.6s linear var(--phase, 0s) infinite;
+}
+
+.sk-news {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+
+.sk-news .sk-meta {
+  height: 7px;
+  margin-top: 2px;
+  opacity: 0.6;
+}
+
+.sk-pods {
+  display: flex;
+  gap: 9px;
+}
+
+.sk-pods .sk {
+  width: 62px;
+}
+
+.sk-bar {
+  height: 13px;
+  border-radius: 2px;
+  background: #2c2c2e;
+}
+
+.sk-end {
+  justify-self: end;
+  width: 44px;
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-draw,
+  .start-lights i,
+  .sk {
+    animation-duration: 8s;
+  }
+
+  .circuit-map.enter .tm-line,
+  .circuit-map.enter circle {
+    animation: none;
+  }
+}
+
+.circuit-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---------- race control feed (live) ---------- */
+
+.rc-cols h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rc-more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.rc-more:hover {
+  color: var(--fg);
+}
+
+.rc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rc-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.rc-list li:last-child {
+  border-bottom: 0;
+}
+
+.rc-list time {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  transform: translateY(-1px);
+}
+
+.rc-dot.plain {
+  --c: var(--dim);
+}
+
+.rc-dot.chequered {
+  background: repeating-conic-gradient(#f5f5f7 0 25%, #1c1c1e 0 50%) 0 0 / 4px 4px;
+}
+
+.rc-full {
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.rc-full::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rc-full::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.hero-time small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.cols.rc-cols {
+  grid-template-columns: 1fr;
+}
+
+/* Flag in force, shown in the big view's header. */
+.big-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 50%, transparent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.big-flag[hidden] {
+  display: none;
+}
+
+.big-flag .flag-tag {
+  margin-right: 0;
+}
+
+.standings-note {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.page-body > .standings-note + .cols {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* ---------- title fight ---------- */
+
+.title-rows {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+.title-rows li {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) 38px 40px 1.4fr 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.title-rows .who {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title-rows .pts {
+  text-align: right;
+}
+
+.title-rows .gap {
+  text-align: right;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.chance-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--chip);
+  overflow: hidden;
+}
+
+.chance-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 4px;
+  background: var(--team, var(--fg));
+}
+
+.title-rows .pct {
+  text-align: right;
+  font-weight: 700;
+}
+
+.title-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.title-note.muted {
+  color: var(--muted);
+}
+
+.title-note.small {
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+/* ---------- live timing tower ---------- */
+
+.hero.slim {
+  padding: 9px 14px;
+}
+
+.hero.slim .hero-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.hero.slim .hero-label strong {
+  display: inline;
+  font-size: 14px;
+}
+
+.tower-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.tower-title h2 {
+  margin: 0;
+}
+
+.tower {
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tower-head,
+.tower li {
+  display: grid;
+  grid-template-columns: 18px 3px 38px minmax(0, 1fr) 64px 40px 26px;
+  align-items: center;
+  gap: 8px;
+}
+
+.tower-head {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tower-head span:nth-child(n + 5),
+.tower .t-second,
+.tower .t-extra {
+  text-align: right;
+}
+
+.tower ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tower li {
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.tower li:nth-child(odd) {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.025), transparent);
+}
+
+.tower li.dim {
+  opacity: 0.45;
+}
+
+.tower .pos {
+  text-align: right;
+  color: var(--muted);
+}
+
+.tower .code {
+  font-weight: 700;
+}
+
+.tower .t-main {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tower .t-second,
+.tower .t-extra {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.t-tyre {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.t-tyre i {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--c);
+  color: var(--c);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.t-badge {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.t-badge.pit,
+.t-badge.exit {
+  background: var(--yellow, #ffd60a);
+  color: #000;
+}
+
+.t-badge.dnf,
+.t-badge.stop,
+.t-badge.ko {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--fg);
+}
+
+.tower-rc {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.live-page {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.live-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.live-page::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+/* The Weekend page keeps race control to one line under the tower. */
+.tower-rc .rc-list li span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tower-rc .rc-list li {
+  min-width: 0;
+}
+
+/* Live page: Gaps / Laps switch and the lap-times view. */
+/* The Live tab, wide: the table on the left, race control on the right. */
+#island.wide {
+  --expanded-w: 860px;
+}
+
+.live-page.live-wide {
+  display: grid;
+  grid-template-columns: 512px minmax(0, 1fr);
+  gap: 22px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.live-wide .live-main,
+.live-wide .live-side {
+  max-height: 400px;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.live-wide .live-main::-webkit-scrollbar,
+.live-wide .live-side::-webkit-scrollbar {
+  width: 8px;
+}
+
+.live-wide .live-main::-webkit-scrollbar-thumb,
+.live-wide .live-side::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.live-wide .live-side h2 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 4px;
+  padding: 4px 0;
+  background: var(--island);
+}
+
+.live-wide .rc-list li {
+  padding: 7px 0;
+  font-size: 12.5px;
+}
+
+.live-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.live-top-row .standings-note {
+  margin-bottom: 0;
+}
+
+/* The Live page's table: gaps, last and best lap, sectors and tyre in one. */
+.tower.full .tower-head,
+.tower.full li {
+  grid-template-columns: 16px 3px 34px minmax(44px, 1fr) minmax(44px, 1fr) 54px 40px 40px 40px 54px 34px;
+  gap: 5px;
+}
+
+.tower.full .tower-head span:nth-child(n + 4) {
+  text-align: right;
+}
+
+.tower.full .tower-head span:nth-child(4) {
+  text-align: left;
+}
+
+.tower.full .t-time,
+.tower.full .t-second {
+  font-size: 12px;
+}
+
+.tower.full .t-time.best {
+  color: var(--fg);
+}
+
+.tower.full .t-time.best.overall {
+  color: #bf5af2;
+  font-weight: 700;
+}
+
+.tower.full .t-main {
+  font-size: 12px;
+}
+
+/* Sector times: yellow unless purple (fastest overall) or green (personal best). */
+.t-time.sec {
+  color: #ffd60a;
+}
+
+.t-time.sec.pb {
+  color: #30d158;
+}
+
+.t-time.sec.overall {
+  color: #bf5af2;
+}
+
+.t-time.sec.prev {
+  opacity: 0.45;
+}
+
+.tower .t-time {
+  text-align: right;
+}
+
+.t-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.t-time.pb {
+  color: #30d158;
+  font-weight: 700;
+}
+
+.t-time.overall {
+  color: #bf5af2;
+  font-weight: 700;
+}
+
+.t-time.prev {
+  color: var(--dim);
+}
+
+/* ---------- docked (Windows/Linux): attached to the top edge ---------- */
+
+/* Square top corners, rounded bottom corners, and shoulders that flare into
+   the screen edge, like the macOS island hangs from the notch. */
+.docked #island {
+  border-radius: 0 0 19px 19px;
+}
+
+.docked #island.expanded {
+  border-radius: 0 0 30px 30px;
+}
+
+.docked #island.big {
+  border-radius: 0 0 34px 34px;
+}
+
+.docked #island.alert {
+  border-radius: 0 0 33px 33px;
+}
+
+.docked #island.hidden {
+  border-radius: 0 0 3px 3px;
+}
+
+/* A ring around the island would cut it off from the shoulders and the top
+   edge. Docked, flags light only the bottom rim instead. */
+.docked #island[data-track='red'] { box-shadow: inset 0 -3px 0 -0.5px var(--red); }
+.docked #island[data-track='sc'],
+.docked #island[data-track='vsc'] { box-shadow: inset 0 -3px 0 -0.5px var(--amber); }
+.docked #island[data-track='yellow'] { box-shadow: inset 0 -3px 0 -0.5px var(--yellow); }
+
+/* Alerts pulse a ring and glow around the island. Docked, only the bottom rim
+   lights up and the glow falls downward, so the island stays one shape with
+   the shoulders and the screen edge. */
+.docked #island.alert[data-level='red'],
+.docked #island.alert[data-level='sc'],
+.docked #island.alert[data-level='vsc'] {
+  animation-name: alert-glow-docked;
+}
+
+@keyframes alert-glow-docked {
+  0%,
+  100% {
+    box-shadow: inset 0 -3px 0 -0.5px var(--glow), 0 8px 20px -8px var(--glow);
+  }
+  50% {
+    box-shadow: inset 0 -4px 0 -0.5px var(--glow), 0 10px 26px -6px var(--glow);
+  }
+}
+
+/* The shoulders are sized by --r, which animates on the zone so they follow the
+   island as it grows. */
+@property --r {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 14px;
+}
+
+.docked #zone {
+  --r: 14px;
+  cursor: default;
+  transition:
+    left 0.45s var(--spring),
+    --r 0.45s var(--spring);
+}
+
+.docked #zone:has(#island.expanded),
+.docked #zone:has(#island.alert) {
+  --r: 22px;
+}
+
+.docked #zone:has(#island.big) {
+  --r: 28px;
+}
+
+/* The island's own shadow would show in the shoulders' curve as a seam: let it
+   fall only below the island. */
+.docked #island {
+  box-shadow: 0 10px 18px -10px rgba(0, 0, 0, 0.55);
+}
+
+/* The shoulders sit right beside the island (flex items of the zone), so they
+   always meet its edges, even while it grows from the auto-hidden sliver. Each
+   reaches 1px under the island, so the two black shapes overlap instead of
+   meeting on a fractional pixel. */
+.shoulder {
+  display: none;
+}
+
+.docked .shoulder {
+  display: block;
+  flex: none;
+  align-self: flex-start;
+  width: calc(var(--r) + 1px);
+  height: var(--r);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.docked .shoulder.l {
+  margin-right: -1px;
+  background: radial-gradient(circle at 0 100%, transparent calc(var(--r) - 0.5px), #000 var(--r));
+}
+
+.docked .shoulder.r {
+  margin-left: -1px;
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--r) - 0.5px), #000 var(--r));
+}
+
+/* Auto-hidden: no shoulders, and they fade in with the island as it opens. */
+.docked #zone:has(#island.hidden) {
+  --r: 0px;
+}
+
+.docked #zone:has(#island.hidden) .shoulder {
+  opacity: 0.45;
+}
+
+/* ---------- update chip ---------- */
+
+.update-chip {
+  position: absolute;
+  top: 15px;
+  right: 54px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+button.update-chip {
+  background: rgba(48, 209, 88, 0.18);
+  color: var(--green);
+  cursor: pointer;
+}
+
+button.update-chip:hover {
+  background: rgba(48, 209, 88, 0.28);
+}
+
+.update-chip.busy {
+  color: var(--muted);
+}
