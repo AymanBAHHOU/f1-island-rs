@@ -48,7 +48,9 @@ let standings = null; // { drivers: { round, rows }, constructors, lastRace }
 let standingsProblem = null;
 let history = null; // { winners, last }
 let historyProblem = null;
+let live = { summary: null, main: false }; // what Rust says about the live session
 let page = 'weekend';
+let pagePicked = false; // a tab was chosen since the island opened
 
 // ---------- asking Rust ----------
 
@@ -89,11 +91,11 @@ async function loadCircuit() {
 function weekendPage(now) {
   const next = weekend.sessions.find((s) => s.endMs > now);
   if (next) {
-    const live = now >= next.startMs;
+    const isLive = now >= next.startMs;
     $('next').textContent = next.name;
-    $('nextLabel').textContent = live ? 'Live now' : 'Next up';
-    $('count').textContent = live ? 'LIVE' : fmtCountdown(next.startMs - now);
-    $('cRight').innerHTML = live
+    $('nextLabel').textContent = isLive ? 'Live now' : 'Next up';
+    $('count').textContent = isLive ? 'LIVE' : fmtCountdown(next.startMs - now);
+    $('cRight').innerHTML = isLive
       ? `<b class="live">LIVE</b> ${esc(next.short)}`
       : `${esc(next.short)} <b>${fmtCountdown(next.startMs - now)}</b>`;
   } else {
@@ -159,6 +161,85 @@ function circuitPage() {
   return recap + winners;
 }
 
+// ---------- live timing ----------
+
+const TYRE = { SOFT: ['S', '#ff3b30'], MEDIUM: ['M', '#ffd60a'], HARD: ['H', '#f5f5f7'], INTERMEDIATE: ['I', '#30d158'], WET: ['W', '#0a84ff'] };
+const tyreCell = (t) => {
+  const known = t && TYRE[t.compound];
+  return known ? `<span class="tyre"><i style="--c:${known[1]}">${known[0]}</i>${esc(t.laps ?? '')}</span>` : '<span class="tyre"></span>';
+};
+
+// Leaders are reported as "LAP 12" (races) or an empty gap (practice).
+const gapText = (v) => (!v || /^LAP/i.test(v) ? '' : v);
+
+// Time left on the session clock, counted down locally between the feed's reports.
+function clockText(clock, now) {
+  if (!clock?.remaining) return '';
+  const [h = 0, m = 0, s = 0] = clock.remaining.split(':').map(Number);
+  let ms = (h * 3600 + m * 60 + s) * 1000;
+  if (clock.running) ms = Math.max(0, ms - Math.max(0, now - Date.parse(clock.utc)));
+  const t = Math.round(ms / 1000);
+  const hh = Math.floor(t / 3600);
+  const mm = Math.floor((t % 3600) / 60);
+  const ss = String(t % 60).padStart(2, '0');
+  return `${hh ? `${hh}:${String(mm).padStart(2, '0')}` : mm}:${ss} left`;
+}
+
+function livePage(now) {
+  const s = live.summary;
+  if (!s) return '<div class="message">The running order appears here during a session.</div>';
+
+  const label = (s.session || '') + (s.kind === 'qualifying' && s.part ? ` · Q${s.part}` : '');
+  const progress = s.lap ? `Lap ${s.lap}${s.totalLaps ? ` of ${s.totalLaps}` : ''}` : clockText(s.clock, now);
+  const race = s.kind === 'race';
+
+  const rows = s.order
+    .map((r) => {
+      const badge = r.out ? (race ? 'DNF' : 'STOP') : r.inPit ? 'PIT' : r.pitOut ? 'EXIT' : r.knockedOut ? 'KO' : '';
+      const interval = r.pos === 1 ? 'Leader' : gapText(r.interval);
+      const gap = r.pos === 1 ? '' : gapText(r.gap);
+      const flag = r.lastLap.overall ? ' overall' : r.lastLap.pb ? ' pb' : '';
+      return `<li class="${r.out || r.knockedOut ? 'dim' : ''}">
+        <span class="pos">${r.pos}</span><i class="team" style="--team:${esc(r.color || '#48484a')}"></i><span class="code">${esc(r.code)}</span>
+        <span class="t-main">${badge ? `<b class="badge ${badge.toLowerCase()}">${badge}</b>` : esc(interval)}</span>
+        <span class="t-gap">${esc(gap)}</span>
+        <span class="t-time${flag}">${esc(r.lastLap.value ?? '')}</span>
+        <span class="t-time best">${esc(r.best ?? '')}</span>
+        ${tyreCell(r.tyre)}
+      </li>`;
+    })
+    .join('');
+
+  const messages = s.messages
+    .slice(0, 4)
+    .map((m) => `<li><time>${esc(timeFmt.format(Date.parse(m.utc)))}</time><span>${esc(m.message ?? '')}</span></li>`)
+    .join('');
+
+  return `<div class="live-top">${esc(label)}${progress ? ` · ${esc(progress)}` : ''}</div>
+    <div class="tower">
+      <div class="tower-head"><span></span><span></span><span></span><span>Int.</span><span>Gap</span><span>Last lap</span><span>Best lap</span><span>Tyre</span></div>
+      <ul>${rows}</ul>
+    </div>
+    ${messages ? `<h2 class="spaced">Race control</h2><ul class="rc">${messages}</ul>` : ''}`;
+}
+
+// The tabs. While a session is on, Live is the first (and where the island opens) until
+// 15 minutes after it finishes (Rust decides: `live.main`); after that it moves to the end.
+function tabs() {
+  const base = [['weekend', 'Weekend'], ['standings', 'Standings'], ['circuit', 'Circuit']];
+  if (!live.summary) return base;
+  return live.main ? [['live', 'Live'], ...base] : [...base, ['live', 'Live']];
+}
+
+function renderTabs() {
+  const list = tabs();
+  if (!list.some(([id]) => id === page)) page = 'weekend'; // the live data went away
+  $('pages').innerHTML = list
+    .map(([id, name]) => `<button data-page="${id}" class="${id === page ? 'active' : ''}">${name}</button>`)
+    .join('');
+  for (const name of ['live', 'weekend', 'standings', 'circuit']) $(`page-${name}`).hidden = name !== page;
+}
+
 function render() {
   const now = Date.now();
   if (!weekend) {
@@ -173,7 +254,9 @@ function render() {
   $('title').textContent = weekend.name;
   $('subtitle').textContent = `${weekend.circuit} · ${weekend.country}`;
 
+  renderTabs();
   weekendPage(now); // also keeps the small island's countdown moving
+  if (page === 'live') $('page-live').innerHTML = livePage(now);
   if (page === 'standings') $('page-standings').innerHTML = standingsPage();
   if (page === 'circuit') $('page-circuit').innerHTML = circuitPage();
   fit();
@@ -186,8 +269,6 @@ function fit() {
 
 function show(next) {
   page = next;
-  for (const b of document.querySelectorAll('#pages button')) b.classList.toggle('active', b.dataset.page === next);
-  for (const name of ['weekend', 'standings', 'circuit']) $(`page-${name}`).hidden = name !== next;
   render();
 }
 
@@ -196,14 +277,30 @@ function show(next) {
 // The tabs only work while the island is open, and the island is only clickable then.
 $('pages').addEventListener('click', (e) => {
   const button = e.target.closest('button[data-page]');
-  if (button) show(button.dataset.page);
+  if (button) {
+    pagePicked = true;
+    show(button.dataset.page);
+  }
 });
 
 // Rust watches the mouse and tells us when it is over the island.
-listen('hover', (event) => {
+listen('hover', async (event) => {
   island.classList.toggle('open', event.payload);
-  if (event.payload) show('weekend'); // it always opens on the Weekend
+  if (event.payload) {
+    pagePicked = false;
+    live = await invoke('live_state'); // fresh: "is Live the main tab?" depends on the time
+    show(live.summary && live.main ? 'live' : 'weekend'); // opens on Live while a session is on
+  }
   fit();
+});
+
+// Rust sends the live state about once a second while a session is being followed.
+listen('live:state', (event) => {
+  const hadLive = !!live.summary;
+  live = event.payload;
+  // The island was open on the Weekend when the feed arrived: move to Live, unless a tab was picked.
+  if (!hadLive && live.summary && live.main && page === 'weekend' && !pagePicked) page = 'live';
+  render();
 });
 
 // Tell Rust where the island is, so it knows what "over the island" means. The island
@@ -216,6 +313,10 @@ const report = () => {
 new ResizeObserver(report).observe(zone);
 report();
 
+invoke('live_state').then((state) => {
+  live = state;
+  render();
+});
 loadWeekend();
 loadStandings();
 setInterval(loadWeekend, 5 * 60 * 1000);

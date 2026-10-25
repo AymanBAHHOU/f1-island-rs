@@ -34,7 +34,7 @@ impl SessionStatus {
         }
     }
 
-    fn is_running(self) -> bool {
+    pub fn is_running(self) -> bool {
         // A red flag (Aborted) is the session still being on, not over.
         matches!(self, Self::Started | Self::Aborted)
     }

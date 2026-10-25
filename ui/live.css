@@ -1,0 +1,158 @@
+/* The Live tab: the running order, race control, and the tab bar's live state. */
+
+.live-top {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tower {
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tower-head,
+.tower li {
+  display: grid;
+  grid-template-columns: 16px 3px 34px minmax(44px, 1fr) minmax(44px, 1fr) 58px 58px 32px;
+  align-items: center;
+  gap: 6px;
+}
+
+.tower-head {
+  padding: 0 6px 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tower-head span:nth-child(n + 5) {
+  text-align: right;
+}
+
+.tower ul {
+  max-height: 330px;
+  margin: 0;
+  padding: 0 6px 0 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+/* A thin dark scrollbar instead of the default bright one. */
+.tower ul::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tower ul::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.tower li {
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
+.tower li.dim {
+  opacity: 0.45;
+}
+
+.tower .pos {
+  color: var(--muted);
+  text-align: right;
+}
+
+.tower .code {
+  font-weight: 700;
+}
+
+.tower .t-main {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tower .t-gap {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.tower .t-time {
+  color: var(--fg);
+  font-size: 12px;
+  text-align: right;
+}
+
+.tower .t-time.pb {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.tower .t-time.overall {
+  color: #bf5af2;
+  font-weight: 700;
+}
+
+.badge {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #ffd60a;
+  color: #000;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.badge.dnf,
+.badge.stop {
+  background: var(--red);
+  color: #fff;
+}
+
+.badge.ko {
+  background: #48484a;
+  color: #fff;
+}
+
+.tyre {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tyre i {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--c);
+  border-radius: 50%;
+  color: var(--fg);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.rc {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc li {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.rc time {
+  flex: none;
+  color: var(--muted);
+}

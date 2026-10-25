@@ -1,9 +1,11 @@
-// F1 Island, stages 1 and 3: a transparent, always-on-top window that shows the island,
+// F1 Island, stages 1, 3 and 4: a transparent, always-on-top window that shows the island,
 // lets clicks fall through to whatever is underneath, and opens when the mouse
 // is over the island. Same idea as the Electron app's main.js, in Rust.
 
 // In release builds, don't open a console window next to the app (Windows only).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod live;
 
 use f1_island::circuit::CircuitHistory;
 use f1_island::jolpica::Jolpica;
@@ -86,10 +88,12 @@ fn main() {
     tauri::Builder::default()
         .manage(HitRect::default())
         .manage(Jolpica::new())
+        .manage(live::Live::default())
         .invoke_handler(tauri::generate_handler![
             weekend,
             standings,
             circuit_history,
+            live::live_state,
             report_rect
         ])
         .setup(|app| {
@@ -144,6 +148,9 @@ fn main() {
                     }
                 }
             });
+
+            // Live timing: a task that decides when to be connected (see live.rs).
+            tauri::async_runtime::spawn(live::supervise(app.handle().clone()));
 
             Ok(())
         })
