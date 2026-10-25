@@ -13,8 +13,10 @@ which provides `window.f1` on top of Tauri commands and events. A feature is don
 - [x] Hover / click-through
 
 ## To do
-- [ ] Track map
-- [ ] Analysis: sessions, short/long runs, compare, tyres & speed, replay, telemetry, location
-- [ ] Alerts · demo mode · settings
+- [x] Track map
+- [x] Analysis backend (identical output to Electron on real sessions): sessions, runs, compare data, tyres & speed, replay, telemetry, location
+- [x] Alerts (flags, SC/VSC, penalties, rate limits; preview)
+- [x] Demo mode (identical data to Electron) · settings file (same format)
 - [ ] Shell: drag, dock + slide, pin, auto-hide, summon hotkey, big-mode geometry, menu, tray, single instance, login item, position memory, mac notch
-- [ ] Release: updater + signing, installers, release workflow, README
+- [x] Update chip (notify mode: checks GitHub releases, opens the page)
+- [ ] Release: self-installing updater + signing, installers, release workflow, README

@@ -3,9 +3,13 @@
 //!
 //! Run the tests with `cargo test --lib` from `src-tauri/`.
 
+pub mod alerts;
+pub mod analysis;
+pub mod analysis_data;
 pub mod championship;
 pub mod circuit;
 pub mod clock;
+pub mod demo;
 pub mod dock;
 pub mod ergast;
 pub mod jolpica;
@@ -19,8 +23,10 @@ pub mod openf1;
 pub mod results;
 pub mod schedule;
 pub mod season;
+pub mod settings;
 pub mod snapshot;
 pub mod standings;
 pub mod status_log;
 pub mod title;
+pub mod updater;
 pub mod version;
